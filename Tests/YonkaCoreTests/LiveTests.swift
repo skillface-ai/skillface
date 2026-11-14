@@ -5,7 +5,8 @@ import Testing
 
 /// The whole flow with the real Claude Code, on the user's plan, so only when asked for:
 /// `YONKA_LIVE=<folder> YONKA_SKILL=<SKILL.md> swift test --filter Live`. It builds the skill
-/// into an app in that folder, answering each question with its first choice, then uses it in
+/// into an app in that folder, answering each question with its first choice and picking the
+/// second of the versions drawn, then uses it in
 /// two sessions, and prints what was said. What it proves is that the second session starts
 /// from what the first one learned.
 struct LiveTests {
@@ -38,9 +39,17 @@ struct LiveTests {
         func stage() -> SkillApp.Stage? { home.apps().first { $0.id == app.id }?.info.stage }
 
         var said = try await say(Agent.begin, in: build, of: app, home: home, agent: agent)
-        for _ in 0..<6 where stage() == .interview || stage() == .design {
+        for _ in 0..<6 where home.designs(of: app).isEmpty {
             said = try await say(Choices.split(said).choices.first ?? "Whatever you think is best. Go on.", in: build, of: app, home: home, agent: agent)
         }
+        // Three versions to choose from, and the builder waits for the choice.
+        let designs = home.designs(of: app)
+        print("\nDESIGNS: \(designs.map { "\($0.id) \($0.name): \($0.idea)" }.joined(separator: " | "))")
+        #expect(designs.count == 3)
+        #expect(stage() == .design)
+        #expect(Set(designs.map(\.html)).count == 3)
+        try home.use(designs[1], in: app)
+        _ = try await say(Agent.chose(designs[1]), in: build, of: app, home: home, agent: agent)
         #expect(stage() == .adjust)
         #expect(home.text(at: app.interface) != Interface.starter)
         _ = try await say(Agent.finish, in: build, of: app, home: home, agent: agent)

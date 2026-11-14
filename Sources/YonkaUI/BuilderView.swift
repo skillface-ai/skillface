@@ -1,55 +1,97 @@
+import AppKit
 import SwiftUI
 import YonkaCore
 
-/// An app being built, or changed: the conversation with the builder on the left, and the
-/// interface as it stands on the right, drawn on its sample data.
+/// An app being built, or changed: the conversation with the builder on the left, and on the
+/// right the interface as it stands, on its sample data, floating on the desk. While the user
+/// is choosing, the versions the builder drew sit under it as live thumbnails.
 struct BuilderView: View {
-    let model: AppModel
+    @Bindable var model: AppModel
     let app: SkillApp
+
+    private var busy: Bool { model.buildSession.map { model.live[$0.id] != nil } ?? false }
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                Steps(stage: app.info.stage)
-                Divider()
                 if let session = model.buildSession {
                     ChatView(
-                        messages: model.messages(of: session), busy: model.live[session.id] != nil,
+                        messages: model.messages(of: session), busy: busy,
                         status: model.live[session.id]?.status ?? "",
                         send: { model.send($0, in: session.id) }, stop: { model.stop(session.id) })
                 }
             }
-            .frame(width: 380)
-            Divider()
-            InterfaceView(html: model.interface, state: model.preview, failed: model.interfaceFailed)
-                .id(model.interface)
-                .overlay(alignment: .topTrailing) {
-                    Text("Preview").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(.regularMaterial, in: Capsule())
-                        .padding(12)
+            .frame(width: 360)
+            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.line, lineWidth: 1) }
+            VStack(spacing: 16) {
+                HStack {
+                    if model.choosing, let design = model.design {
+                        Text("\(design.id) · \(design.name)").font(Theme.serif(20))
+                        Text(design.idea).foregroundStyle(Theme.dim).lineLimit(1)
+                    } else {
+                        Text("Preview").font(Theme.serif(20))
+                        Text("on sample data").foregroundStyle(Theme.dim)
+                    }
+                    Spacer()
+                    if model.choosing {
+                        Button { model.choose() } label: { Text("Take this one").pill(filled: true) }
+                            .buttonStyle(.plain).disabled(busy)
+                    }
                 }
+                .font(.callout)
+                let html = model.choosing ? model.design?.html ?? model.interface : model.interface
+                InterfaceView(html: html, state: model.preview, failed: model.interfaceFailed)
+                    .id(html)
+                    .stage()
+                if model.choosing {
+                    HStack(spacing: 16) {
+                        ForEach(model.designs) { design in
+                            Thumbnail(design: design, state: model.preview, selected: design.id == model.design?.id) {
+                                model.designID = design.id
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.leading, 20)
         }
+        .padding([.horizontal, .bottom], 14)
     }
 }
 
-/// Where the build is: the four steps, the current one marked.
-private struct Steps: View {
-    let stage: SkillApp.Stage
+/// One version, drawn live and small: the page at full size, scaled down, so what's chosen
+/// from is the real thing.
+private struct Thumbnail: View {
+    let design: Design
+    let state: Interface.State
+    let selected: Bool
+    let pick: () -> Void
+
+    private static let page = CGSize(width: 1040, height: 650)
+    private static let scale = 0.16
 
     var body: some View {
-        let steps = SkillApp.Stage.allCases.filter { $0 != .done }
-        let current = steps.firstIndex(of: stage) ?? steps.count
-        HStack(spacing: 0) {
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                Text(step.rawValue.capitalized)
-                    .font(.caption.weight(index == current ? .semibold : .regular))
-                    .foregroundStyle(index == current ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                    .frame(maxWidth: .infinity)
+        Button(action: pick) {
+            VStack(spacing: 8) {
+                let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+                InterfaceView(html: design.html, state: state)
+                    .frame(width: Self.page.width, height: Self.page.height)
+                    .scaleEffect(Self.scale)
+                    .frame(width: Self.page.width * Self.scale, height: Self.page.height * Self.scale)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .clipShape(shape)
+                    .allowsHitTesting(false)
+                    .padding(4)
+                    .overlay { RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(selected ? Theme.accent : Theme.line, lineWidth: selected ? 2 : 1) }
+                Text("\(design.id) · \(design.name)")
+                    .font(.caption.weight(selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.dim))
             }
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 12)
-        .animation(.easeInOut(duration: 0.2), value: stage)
+        .buttonStyle(.plain)
+        .help(design.idea)
     }
 }
 

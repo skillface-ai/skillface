@@ -81,6 +81,24 @@ struct HomeTests {
         #expect(home.text(at: app.skill).hasPrefix("---"))
     }
 
+    @Test func theVersionChosenBecomesTheInterface() throws {
+        let home = temporaryHome()
+        let app = try home.create(Skill(text: tutor))
+        #expect(home.designs(of: app).isEmpty)
+        try FileManager.default.createDirectory(at: app.designs, withIntermediateDirectories: true)
+        for id in ["B", "A", "C"] { try Data("<p>\(id)</p>".utf8).write(to: app.designs.appending(path: "\(id).html")) }
+        try Data("".utf8).write(to: app.designs.appending(path: "D.html"))
+        // The builder writes the index, so one that's half there still names what it can.
+        try Data(#"[{"id":"A","name":"Focus","idea":"One question."},{"id":"B","name":7},"junk"]"#.utf8).write(to: app.designs.appending(path: "index.json"))
+        let designs = home.designs(of: app)
+        #expect(designs.map(\.id) == ["A", "B", "C"])
+        #expect(designs.map(\.name) == ["Focus", "B", "C"])
+        #expect(designs[0].idea == "One question.")
+        try home.use(designs[1], in: app)
+        #expect(home.text(at: app.interface) == "<p>B</p>")
+        #expect(Agent.chose(designs[0]) == "Use version A, Focus.")
+    }
+
     @Test func sessionsComeBackNewestFirst() throws {
         let home = temporaryHome()
         let app = try home.create(Skill(text: tutor))

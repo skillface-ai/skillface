@@ -7,10 +7,8 @@ import YonkaCore
 /// catch up with what an agent wrote.
 @MainActor @Observable
 package final class AppModel {
-    package enum Tab: String, CaseIterable, Identifiable {
-        case sessions = "Sessions", memory = "Memory", skill = "Skill"
-        package var id: String { rawValue }
-    }
+    /// Which of an app's files is being changed.
+    package enum Files { case memory, skill }
 
     /// An answer on its way.
     package struct Live: Equatable {
@@ -22,14 +20,22 @@ package final class AppModel {
     private let agent: AgentProcess
 
     package private(set) var apps: [SkillApp] = []
+    /// The app that's open. Nil is home.
     package var selected: String? { didSet { if selected != oldValue { open() } } }
-    package var tab = Tab.sessions
+    /// Home's sheet of every app.
+    package var showingAll = false
+    /// An open app's memory, beside it.
+    package var knowing = false
+    package var showingSkill = false
     /// The selected app's, newest first, the one it's built in among them.
     package private(set) var sessions: [Session] = []
     package var sessionID: String?
     package private(set) var memory: [TextFile] = []
     package private(set) var interface = ""
     package private(set) var demo = ""
+    /// The versions the builder drew to choose from, and the one being looked at.
+    package private(set) var designs: [Design] = []
+    package var designID: String?
     package private(set) var skill = ""
     package private(set) var rules = ""
     package var notice: String?
@@ -43,14 +49,15 @@ package final class AppModel {
         self.agent = agent ?? AgentProcess(errors: home.errors)
         attempt { try BuilderSkills.write(to: home.plugin) }
         apps = home.apps()
-        selected = apps.first?.id
-        // `didSet` doesn't run from an init.
-        open()
     }
 
     // MARK: What's showing
 
     package var app: SkillApp? { apps.first { $0.id == selected } }
+    /// Every app, the one used last first.
+    package var recent: [SkillApp] {
+        apps.map { ($0, home.lastUsed($0)) }.sorted { $0.1 > $1.1 }.map(\.0)
+    }
     package var useSessions: [Session] { sessions.filter { $0.kind == .use } }
     package var session: Session? { useSessions.first { $0.id == sessionID } }
     package var buildSession: Session? { sessions.first { $0.id == app?.info.buildSession } }
@@ -66,6 +73,10 @@ package final class AppModel {
             app: app?.info.name ?? "", session: session.title, messages: messages(of: session), memory: memory,
             busy: live[session.id] != nil, status: live[session.id]?.status ?? "")
     }
+
+    package var design: Design? { designs.first { $0.id == designID } ?? designs.first }
+    /// While the user is choosing between versions, rather than changing the one they chose.
+    package var choosing: Bool { app?.info.stage == .design && !designs.isEmpty }
 
     package var preview: Interface.State { Interface.preview(of: app?.info.name ?? "", demo: demo) }
 
@@ -84,13 +95,14 @@ package final class AppModel {
     package func refresh() {
         apps = home.apps()
         guard let app else {
-            (sessions, memory, interface, demo, skill, rules) = ([], [], "", "", "", "")
-            if selected != nil { selected = apps.first?.id }
+            (sessions, memory, interface, demo, skill, rules, designs) = ([], [], "", "", "", "", [])
+            if selected != nil { selected = nil }
             return
         }
         sessions = home.sessions(of: app)
         memory = home.memory(of: app)
         (interface, demo) = (home.text(at: app.interface), home.text(at: app.demo))
+        designs = home.designs(of: app)
         (skill, rules) = (home.text(at: app.skill), home.text(at: app.rules))
         // An app in use always has a session to type into.
         if app.info.stage == .done, session == nil {
@@ -99,7 +111,7 @@ package final class AppModel {
     }
 
     private func open() {
-        (tab, sessionID) = (.sessions, nil)
+        (sessionID, designID, showingAll, knowing, showingSkill) = (nil, nil, false, false, false)
         refresh()
     }
 
@@ -124,7 +136,7 @@ package final class AppModel {
     package func delete(_ app: SkillApp) {
         for session in home.sessions(of: app) { stop(session.id) }
         attempt { try home.delete(app) }
-        if selected == app.id { selected = home.apps().first?.id }
+        if selected == app.id { selected = nil }
         refresh()
     }
 
@@ -139,6 +151,13 @@ package final class AppModel {
         refresh()
     }
 
+    /// The version being looked at becomes the app's interface, and the builder is told which.
+    package func choose() {
+        guard let app, let design, let build = buildSession, live[build.id] == nil else { return }
+        attempt { try home.use(design, in: app) }
+        send(Agent.chose(design), in: build.id)
+    }
+
     /// The design is right. A first build still has its last step to do; an app that already
     /// runs goes straight back to running.
     package func finish() {
@@ -151,10 +170,10 @@ package final class AppModel {
         }
     }
 
-    package func save(_ text: String, as name: String, in tab: Tab) {
+    package func save(_ text: String, as name: String, in files: Files) {
         guard let app else { return }
         attempt {
-            switch (tab, name) {
+            switch (files, name) {
             case (.memory, _): try home.remember(text, as: name, in: app)
             case (_, "SKILL.md"): try Data(text.utf8).write(to: app.skill, options: .atomic)
             default: try Data(text.utf8).write(to: app.rules, options: .atomic)
@@ -174,7 +193,6 @@ package final class AppModel {
     /// The empty one if there is one, so pressing it twice doesn't leave two.
     package func newSession() {
         guard let app else { return }
-        tab = .sessions
         if let empty = useSessions.first(where: \.messages.isEmpty) { return sessionID = empty.id }
         let session = Session(kind: .use)
         attempt { try home.save(session, in: app) }

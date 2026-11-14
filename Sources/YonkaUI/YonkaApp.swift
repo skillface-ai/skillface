@@ -12,16 +12,24 @@ package struct YonkaApp: App {
     package var body: some Scene {
         Window("Yonka", id: "main") {
             RootView(model: model)
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: 980, minHeight: 640)
+                // Under the title bar, which is hidden: the window is all content.
+                .ignoresSafeArea(edges: .top)
                 .onAppear { NSApp.activate() }
         }
-        .defaultSize(width: 1200, height: 780)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1280, height: 820)
         .commands {
             // App-wide shortcuts are menu items, so they work whatever is showing.
             CommandGroup(replacing: .newItem) {
                 Button("New Session") { model.newSession() }.keyboardShortcut("n")
                     .disabled(model.app?.info.stage != .done)
-                Button("New App…") { model.adding = true }.keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Home") { model.selected = nil }.keyboardShortcut("h", modifiers: [.command, .shift])
+                Button("All Apps") {
+                    model.selected = nil
+                    model.showingAll = true
+                }
+                .keyboardShortcut("k")
             }
         }
     }

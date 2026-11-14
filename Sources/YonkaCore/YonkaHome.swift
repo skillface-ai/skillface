@@ -36,6 +36,12 @@ package struct YonkaHome: Sendable {
         .sorted { $0.info.name.localizedCaseInsensitiveCompare($1.info.name) == .orderedAscending }
     }
 
+    /// When an app was last used: when a session of it was last written. Its sessions folder
+    /// changes each time one is, since every save replaces the file.
+    package func lastUsed(_ app: SkillApp) -> Date {
+        (try? app.sessions.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+    }
+
     /// A new app from a skill: the starter interface, no memory, and the session it'll be built in.
     package func create(_ skill: Skill) throws -> SkillApp {
         let slug = Skill.slug(skill.name)
@@ -62,6 +68,28 @@ package struct YonkaHome: Sendable {
     /// To the Trash, memory and sessions with it, so it can be put back.
     package func delete(_ app: SkillApp) throws {
         try Self.files.trashItem(at: app.folder, resultingItemURL: nil)
+    }
+
+    // MARK: Designs
+
+    /// The versions the builder drew, in order. Each is an `.html` in `designs/`; `index.json`
+    /// names them, and whatever it leaves out or gets wrong, the file's own name stands in.
+    package func designs(of app: SkillApp) -> [Design] {
+        let read = try? JSONSerialization.jsonObject(with: Data(contentsOf: app.designs.appending(path: "index.json")))
+        let index = (read as? [Any] ?? []).compactMap { $0 as? [String: Any] }
+        let found = (try? Self.files.contentsOfDirectory(at: app.designs, includingPropertiesForKeys: nil)) ?? []
+        return found.filter { $0.pathExtension == "html" }.compactMap { file -> Design? in
+            let id = file.deletingPathExtension().lastPathComponent
+            guard let html = try? String(contentsOf: file, encoding: .utf8), !html.isEmpty else { return nil }
+            let about = index.first { $0["id"] as? String == id }
+            return Design(id: id, name: about?["name"] as? String ?? id, idea: about?["idea"] as? String ?? "", html: html)
+        }
+        .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+
+    /// The version the user chose becomes the app's interface. The others stay, to go back to.
+    package func use(_ design: Design, in app: SkillApp) throws {
+        try Data(design.html.utf8).write(to: app.interface, options: .atomic)
     }
 
     // MARK: Files

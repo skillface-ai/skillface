@@ -29,6 +29,8 @@ package struct AgentTurn: Sendable {
 package enum Agent {
     /// What the app sends for the user when a skill is added.
     package static let begin = "Turn this skill into an app with me."
+    /// When they pick one of the versions drawn for them.
+    package static func chose(_ design: Design) -> String { "Use version \(design.id), \(design.name)." }
     /// And when they say the design is right.
     package static let finish = "That's right. Finish the app."
 
@@ -87,15 +89,16 @@ package enum Agent {
         write the step you are on to "stage" in app.json:
 
         1. interview (yonka:interview): read the skill, then ask the user what only they can answer.
-        2. design (yonka:design): write the interface, on sample data.
-        3. adjust (yonka:adjust): change it with the user until it's right. A user who comes back later to change \
-        the interface lands here too.
+        2. design (yonka:design): work out what kind of tool this skill is, then draw three versions of its \
+        interface, on sample data, for the user to choose from.
+        3. adjust (yonka:adjust): change the one they chose until it's right. A user who comes back later to \
+        change the interface lands here too.
         4. implement (yonka:implement): write what the running app needs, check it, and set stage to "done".
 
         yonka:interface is the contract interface.html is written to: load it before you write or change one.
 
-        The user reads your messages in a narrow chat beside a live preview of interface.html, which redraws each \
-        time you change a file. So keep messages to a few plain sentences, never paste code or file contents into \
+        The user reads your messages in a narrow chat beside a live preview, which redraws each time you change a \
+        file: the versions in designs/ while they are choosing, interface.html after. So keep messages to a few plain sentences, never paste code or file contents into \
         them, and ask one question at a time. When a question has a few likely answers, end the message with them \
         as a checklist, one per line, your recommendation first, like this:
 

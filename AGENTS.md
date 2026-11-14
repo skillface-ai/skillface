@@ -9,15 +9,17 @@ to come back to. README.md has the product and the flow. Its architecture follow
 
 - `Sources/YonkaCore/`: no SwiftUI, so all of it runs under `swift test`.
   - `Skill.swift`: a SKILL.md, read and checked. `YonkaError`.
-  - `SkillApp.swift`: an app's folder, `Info` (`app.json`), `Stage`, `Session`, `TextFile`, `Choices`.
+  - `SkillApp.swift`: an app's folder, `Info` (`app.json`), `Stage`, `Design`, `Session`, `TextFile`, `Choices`.
   - `YonkaHome.swift`: where everything lives. Every read and write of an app's folder.
   - `Agent.swift`: `AgentTurn`, Claude Code's flags and what it's told (`Agent`), its stream
     (`AgentStream`, `AgentEvent`, `Reply`), and running it (`AgentProcess`).
   - `BuilderSkills.swift`: the builder's five skills, written out as a Claude Code plugin.
   - `Interface.swift`: what an `interface.html` is given: `bridge` (`window.yonka`), `css`,
     `policy`, the starter page, and the `State` it's handed.
-- `Sources/YonkaUI/`: `AppModel` (every workflow; failures become `notice`) and the screens.
-  `InterfaceView` is the one web view.
+- `Sources/YonkaUI/`: `AppModel` (every workflow; failures become `notice`) and the screens:
+  `HomeView` (the drop target, the dock, All Apps), `AppScreen` (an open app: the lifeline, what
+  it knows), `BuilderView` (the conversation, the versions). `Theme` is Yonka's own look, always
+  dark; `InterfaceView` is the one web view, and an app's page follows the Mac's appearance.
 - `Sources/Yonka/main.swift`: the app.
 - `Sources/Shots/`: dev-only, draws every screen offscreen on sample data.
 - `Tests/YonkaCoreTests/`: on a throwaway home and a stand-in for Claude Code. `LiveTests` is the
@@ -46,6 +48,6 @@ make run      # open the app
   id only as a UUID, and `app.json` decodes whatever is in it.
 - **Values don't change.** Core's types are immutable: a change is a new value (`Session.adding`,
   `Info.at`, `Reply.applying`).
-- **A UI change gets shots before and after.** They can't see the sidebar's glass or the toolbar:
-  check those by running the app.
+- **A UI change gets shots before and after.** They can't see the window's own buttons, which sit
+  over the content (`Theme.lights`): check those by running the app.
 - Comments explain why. `ponytail:` marks a deliberate ceiling and what to do when it's hit.

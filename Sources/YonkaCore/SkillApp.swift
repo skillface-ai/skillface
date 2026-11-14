@@ -8,6 +8,7 @@ import Foundation
 ///     app.json         its name, symbol, and how far the build is
 ///     interface.html   what the user sees
 ///     demo.json        sample memory and messages, for the design's preview
+///     designs/         the versions the builder drew to choose from: `A.html`…, and `index.json`
 ///     memory/          what outlives every session; the running agent's one folder
 ///     sessions/        every conversation, one JSON file each
 package struct SkillApp: Identifiable, Equatable, Sendable {
@@ -20,6 +21,7 @@ package struct SkillApp: Identifiable, Equatable, Sendable {
     package var rules: URL { folder.appending(path: "APP.md") }
     package var interface: URL { folder.appending(path: "interface.html") }
     package var demo: URL { folder.appending(path: "demo.json") }
+    package var designs: URL { folder.appending(path: "designs") }
     package var memory: URL { folder.appending(path: "memory") }
     package var sessions: URL { folder.appending(path: "sessions") }
 
@@ -54,6 +56,21 @@ package struct SkillApp: Identifiable, Equatable, Sendable {
 
         package func at(_ stage: Stage) -> Info { Info(name: name, symbol: symbol, stage: stage, buildSession: buildSession) }
         package func built(in session: String) -> Info { Info(name: name, symbol: symbol, stage: stage, buildSession: session) }
+    }
+}
+
+/// One version of an app's interface, drawn for the user to choose from.
+package struct Design: Identifiable, Equatable, Sendable {
+    /// Its file's name in `designs/`, without the `.html`: "A".
+    package let id: String
+    /// What the builder calls it: "Focus".
+    package let name: String
+    /// What it's for, in a line.
+    package let idea: String
+    package let html: String
+
+    package init(id: String, name: String, idea: String, html: String) {
+        (self.id, self.name, self.idea, self.html) = (id, name, idea, html)
     }
 }
 

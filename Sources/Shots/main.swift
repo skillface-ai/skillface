@@ -39,7 +39,7 @@ MainActor.assumeIsolated {
             return draw(model, "app-preview", into: out)
         }
         let home = YonkaHome(root: FileManager.default.temporaryDirectory.appending(path: "yonka-shots-\(UUID().uuidString)"))
-        draw(AppModel(home: home), "1-welcome", into: out)
+        draw(AppModel(home: home), "1-home-empty", into: out)
 
         // A skill just added: the builder is asking its first question.
         let app = try home.create(Skill(text: skill))
@@ -53,8 +53,22 @@ MainActor.assumeIsolated {
             - [ ] Only the question, and the map when I ask
             - [ ] The map on top, the conversation under it
             """)), in: app)
-        draw(AppModel(home: home), "2-interview", into: out)
-        draw(AppModel(home: home), "2-interview-dark", appearance: .darkAqua, into: out)
+        draw(open(app, in: home), "2-read", into: out)
+
+        // The builder drew three versions: the user is choosing.
+        try FileManager.default.createDirectory(at: app.designs, withIntermediateDirectories: true)
+        let page = { (layout: String) in """
+            <style>body { display: flex; \(layout) gap: 24px; padding: 40px } h1 { font-size: 26px; margin: 0 0 12px } .map { background: var(--surface); border-radius: var(--radius); padding: 20px; min-width: 240px } .bar { height: 4px; border-radius: 2px; background: var(--accent); margin: 8px 0 16px }</style>
+            <div style="flex: 2"><div style="color: var(--secondary)">Elision · question 4</div><h1>What does the compiler infer for this signature?</h1><pre>fn first(s: &str) -> &str</pre></div>
+            <div class="map"><b>Rust lifetimes</b><p>Borrowing</p><div class="bar" style="width: 80%"></div><p>Elision</p><div class="bar" style="width: 40%"></div></div>
+            """ }
+        for (id, layout) in [("A", ""), ("B", "flex-direction: column-reverse;"), ("C", "flex-direction: row-reverse;")] {
+            try Data(page(layout).utf8).write(to: app.designs.appending(path: "\(id).html"))
+        }
+        try Data(#"[{"id":"A","name":"Focus","idea":"One question fills the screen, the map quiet beside it."},{"id":"B","name":"Dashboard","idea":"Your levels first, the next question under them."},{"id":"C","name":"Notebook","idea":"Reads like a page of notes."}]"#.utf8)
+            .write(to: app.designs.appending(path: "index.json"))
+        try home.save(app.info.at(.design), of: app)
+        draw(open(app, in: home), "3-draw", into: out)
 
         // Built and in use: two sessions, and what it remembers.
         try home.save(app.info.at(.done), of: app)
@@ -66,16 +80,29 @@ MainActor.assumeIsolated {
             .init(role: .assistant, text: "Last time you had **borrowing** at 4 and **elision** at 2, so let's pick up at elision.\n\nWhat does the compiler infer for this signature, and why?\n\n```\nfn first(s: &str) -> &str\n```"),
             .init(role: .user, text: "The output borrows from s?"),
         ]), in: app)
-        let model = AppModel(home: home)
-        draw(model, "3-sessions", into: out)
-        draw(model, "3-sessions-dark", appearance: .darkAqua, into: out)
-        model.tab = .memory
-        draw(model, "4-memory", into: out)
-        model.tab = .skill
-        draw(model, "5-skill", into: out)
+        let model = open(app, in: home)
+        draw(model, "4-in-use", into: out)
+        model.knowing = true
+        draw(model, "5-what-it-knows", into: out)
         model.editInterface()
-        draw(model, "6-edit-interface", into: out)
-        draw(NewAppSheet(model: model), "7-new-app", size: NSSize(width: 520, height: 520), into: out)
+        draw(model, "6-shape", into: out)
+
+        // Home, with apps of every kind on the dock, and all of them.
+        for name in ["Code Reviewer", "Weekly Planner", "Contract Reader", "Meeting Notes", "Spec Writer", "Running Log", "Bug Triage", "Paper Reader", "Cold Email", "Debate Coach", "Grant Writer", "Meal Planner"] {
+            let made = try home.create(Skill(text: "# \(name)\n\nDo it well."))
+            if name != "Grant Writer" { try home.save(made.info.at(.done), of: made) }
+        }
+        let wall = AppModel(home: home)
+        draw(wall, "7-home", into: out)
+        wall.showingAll = true
+        draw(wall, "8-all-apps", into: out)
+    }
+
+    /// The model as it is with that app open.
+    static func open(_ app: SkillApp, in home: YonkaHome) -> AppModel {
+        let model = AppModel(home: home)
+        model.selected = app.id
+        return model
     }
 
     static func draw(_ model: AppModel, _ name: String, appearance: NSAppearance.Name = .aqua, into folder: URL) {

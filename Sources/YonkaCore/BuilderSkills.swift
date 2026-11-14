@@ -6,8 +6,8 @@ import Foundation
 package enum BuilderSkills {
     package static let all: [(name: String, description: String, text: String)] = [
         ("interview", "Step 1 of building a Yonka app: read the skill, then ask the user what only they can answer.", interview),
-        ("design", "Step 2 of building a Yonka app: write its interface, on sample data, for the user to look at.", design),
-        ("adjust", "Step 3 of building a Yonka app, and how to change one later: change the interface with the user until it's right.", adjust),
+        ("design", "Step 2 of building a Yonka app: work out what kind of tool the skill is, then draw three versions of its interface, on sample data, for the user to choose from.", design),
+        ("adjust", "Step 3 of building a Yonka app, and how to change one later: take the version the user chose and change it with them until it's right.", adjust),
         ("implement", "Step 4 of building a Yonka app: write what the running app needs, check it, and finish.", implement),
         ("interface", "The contract a Yonka app's interface.html is written to: its files, the yonka API, the CSS it starts with, and how it should look. Load before writing or changing one.", interface),
     ]
@@ -70,43 +70,107 @@ package enum BuilderSkills {
     static let design = """
         # Design
 
-        You know the skill and what the user wants. Now they need something to look at.
+        You know the skill and what the user wants. Now they need something to look at, and a choice.
 
-        1. Load yonka:interface. It is the contract, and the taste.
-        2. Decide the memory the interface draws from: which files, and the exact shape of each. Anything \
+        ## First, decide what kind of tool this is
+
+        A skill's app is not a chat window with decoration. Ask what a professional would build for someone \
+        who does this work every day, and name it in a phrase before you draw anything. Some that come up:
+
+        - **A study tool** (tutoring, drilling, language practice): one question at a time, large, with \
+        progress always in view. Think flashcards and a course map.
+        - **A review desk** (code review, editing, critique): the thing under review fills the screen, findings \
+        sit beside it as a list you work through, each with a state.
+        - **A planner** (weekly plans, roadmaps, trip planning): a board or a calendar is the surface, and \
+        the conversation is a side panel that changes it.
+        - **A log or tracker** (habits, a journal, a training diary): today's entry first, then history as a \
+        timeline or a chart.
+        - **A workbench** (writing, research, analysis): a document that grows, with the conversation as \
+        margin notes.
+        - **A console** (ops, debugging, triage): dense, a queue on the left, the current item in the middle, \
+        status everywhere.
+
+        If the skill is none of these, say what it is in your own words. The conversation is always available, \
+        since it's how the skill thinks, but it's the main surface only when talking really is the work.
+
+        The kind of tool also sets the character: a study tool is calm and encouraging, a console is dense and \
+        exact, a journal is warm, a review desk is neutral so the work stands out. yonka:interface says how \
+        character becomes type, colour and spacing.
+
+        ## Then, decide what it remembers
+
+        Decide the memory every version draws from: which files, and the exact shape of each. Anything \
         structured that the user sees (progress, a list, a plan) comes from a memory file, never from reading \
-        the conversation's text. Keep it to the fewest files that work, with names a person would understand in \
-        the Memory tab: `skill-map.json`, `notes.md`.
-        3. Write demo.json: memory in those shapes and a few messages, as a real session a little way in would \
-        have them. The preview is drawn from it, so make it true to life, not lorem ipsum.
-        4. Write interface.html, whole. It must look right on demo.json and with no memory and no messages at \
-        all, which is what a new user sees first.
-        5. Give the app its name and an SF Symbol that suits it, in app.json ("name", "symbol"). A short name, \
-        as it would sit under an icon.
-        6. Set "stage" to "adjust" in app.json.
+        the conversation's text. The fewest files that work, with names a person would understand in the \
+        Memory tab: `skill-map.json`, `notes.md`. All three versions read the same memory, so the choice \
+        between them is about the interface alone.
+
+        Write demo.json: memory in those shapes and a few messages, as a real session a little way in would \
+        have them. Every preview is drawn from it, so make it true to life, not lorem ipsum.
+
+        ## Then, draw three versions
+
+        Load yonka:interface. Then write three whole interfaces, each a real answer to "what should this \
+        be", not one design in three colours:
+
+        - `designs/A.html`, `designs/B.html`, `designs/C.html`, each complete and self-contained.
+        - `designs/index.json`: `[{"id": "A", "name": "Focus", "idea": "One question fills the screen, the \
+        map stays quiet beside it."}, …]`. A name of one or two words, and an idea of one line saying what \
+        this version is for, in the user's terms.
+
+        Make them differ in what they put first. For example: one that gives the whole screen to the single \
+        thing the user does, one that leads with the overview and progress, and one that reads as a document \
+        or a timeline. If two of them could swap headings without anyone noticing, one of them is wasted: \
+        redraw it. Put the one you would pick as A.
+
+        Each must look right on demo.json and with no memory and no messages at all, which is what a new \
+        user sees first.
+
+        Give the app its name and an SF Symbol that suits it, in app.json ("name", "symbol"). A short name, \
+        as it would sit under an icon. Leave "stage" at "design": the user is choosing.
 
         Never write into memory/. It is the user's real memory, and it starts empty.
 
-        Then tell the user, in two sentences, what they are looking at and what it will remember, and ask what \
-        they'd change. Don't describe the code.
+        ## Then, hand over the choice
+
+        Yonka shows the three side by side as live thumbnails, with a "Use this one" button. Tell the user, \
+        in three short lines, what kind of tool you took the skill to be, what each version is for, and which \
+        you'd pick and why. Don't describe the code. Then stop and wait for their choice.
         """
 
     static let adjust = """
         # Adjust
 
-        The user is looking at the interface and telling you what to change. This is also where they land when \
-        they come back to an app they've been using and want it different: then read interface.html, APP.md and \
-        demo.json first, so you know what is there.
+        The user has chosen a version, or is back to change an app they've been using.
+
+        ## When they choose
+
+        "Use version B, Dashboard." means Yonka has already copied designs/B.html to interface.html. Read \
+        interface.html, set "stage" to "adjust" in app.json, and say in one line that it's theirs to change \
+        now. If they ask for a mix ("B, but with A's map"), make it in interface.html: the versions in \
+        designs/ are there to read from.
+
+        If none of the three is right, ask what's missing in one question, go back to yonka:design, and \
+        draw three new ones over the old.
+
+        ## When they ask for a change
 
         - Make the change they asked for and nothing else. Edit, don't rewrite: what they didn't mention, they \
         liked.
         - If a change needs something the interface doesn't have (a new thing remembered, a new shape), add it \
         to demo.json too, so they see it, and to APP.md if there is one, so the running app keeps it.
-        - An app in use has real memory in the old shape. The interface has to draw it as it is: treat anything \
-        new as possibly missing.
         - Load yonka:interface before a change bigger than a tweak. If what they ask for breaks it (a font from \
         the web, a link out), say what you can do instead, in a sentence.
         - Answer in one line: what changed. They can see the rest.
+
+        ## When they come back to an app in use
+
+        Read interface.html, APP.md and demo.json first, so you know what is there. The app has real memory \
+        in the old shape, and the interface has to draw it as it is: treat anything new as possibly missing. \
+        If they want to see other directions rather than a change, set "stage" to "design", load yonka:design \
+        and draw three new versions from what the app is today.
+
+        ## When it's right
 
         When they say it's right, or ask you to finish: set "stage" to "implement" in app.json, load \
         yonka:implement, and carry on in the same turn.
@@ -162,10 +226,13 @@ package enum BuilderSkills {
         | `app.json` | `name`, `symbol` (an SF Symbol's name), `stage` | You |
         | `interface.html` | What the user sees | You |
         | `demo.json` | Sample data for the preview: `{"memory": {"file": …}, "messages": [{"role": "user", "text": "…"}]}` | You |
+        | `designs/` | The versions to choose from: `A.html`, `B.html`, `C.html`, and `index.json` naming them | You, in the design step |
         | `APP.md` | What the running agent needs beyond the skill | You, in the last step |
         | `memory/` | What the app remembers | Only the running agent. Never you |
 
         ## interface.html
+
+        A version in designs/ is written to exactly the same rules: it becomes interface.html when chosen.
 
         One file. Its CSS and JavaScript are inline, and it loads nothing: no CDN, no web font, no remote image, \
         no `fetch`, no link that opens. Yonka blocks all of those, so a page that needs one is a broken page. \
@@ -215,24 +282,57 @@ package enum BuilderSkills {
 
         ## How it should look
 
-        Like something Apple would ship: calm, obvious, nothing extra.
+        Like a product a good team shipped for exactly this job. Not a chat window, not a template.
 
-        - **One thing matters most on the screen.** Find it and give it the room. Everything else is quieter \
-        and smaller, or isn't there.
-        - **Content, not chrome.** No header bar repeating the app's name, no boxes around boxes, no labels on \
-        what is obvious. If taking something away loses nothing, take it away.
-        - **Type does the work.** Hierarchy from size and weight and `--secondary`, not from colour or borders. \
-        Two sizes and two weights are usually enough. A reading column no wider than 680px.
-        - **Space is the layout.** Generous, even margins. Align everything to something.
-        - **One accent**, for the one thing to press or the one thing that's current. No gradients, no shadows \
-        for decoration, no emoji as icons.
-        - **It feels alive.** Enter sends and Shift-Enter makes a line. The box has focus when the page opens. \
-        New messages scroll into view. While the agent works, something small says so. Changes ease in over \
-        about 200ms rather than jumping.
-        - **Empty is a first impression.** With no messages and no memory, say in a line what this is and offer \
-        the way in: a box, or a few things to start with.
-        - **Words are short and plain.** "Message", not "Type your message here…".
+        ### Fit the purpose
 
-        The starter interface.html already in the folder is a plain conversation done this way. Build from it.
+        - **Start from the work, not from the conversation.** Decide what object the user is really working \
+        on (a question, a document, a board, a queue, a day) and make that the screen. The conversation is \
+        how the skill thinks: give it the main column only when talking is the work, and otherwise a side \
+        panel, a thread under the object, or the answer box alone.
+        - **Use real controls.** What is structured gets a structured control: levels are bars, a list of \
+        findings is a list with states, a plan is a board, a choice between a few things is buttons, a date \
+        is a date. Each one acts by sending what the user would have typed.
+        - **Give it the character of its job.** Set the character with the few things that carry it:
+          - *Type.* System sans for tools. `"New York", Georgia, serif` for reading and writing. \
+        `ui-monospace` for code, data and consoles. `ui-rounded` for something friendly. One family for \
+        text, at most one more for display or numbers.
+          - *Density.* A console is tight (13px, 8px rhythm). A study tool or a journal is open (16–17px, \
+        24px rhythm).
+          - *Accent.* One colour that suits the subject, set by redefining `--accent` (in both light and \
+        dark). Keep every other colour to the variables.
+          - *Shape.* `--radius` small and square for exact tools, larger for soft ones.
+
+        ### Craft
+
+        - **One thing matters most on the screen.** Give it the room and the weight. Everything else is \
+        quieter and smaller, or isn't there.
+        - **A type scale, not a pile of sizes.** Three or four sizes with clear jobs (a title, body, a \
+        label, a big number) and two weights. Labels in `--secondary`. Numbers that change line up with \
+        `font-variant-numeric: tabular-nums`.
+        - **A spacing scale.** Multiples of 4 or 8, the same gap for the same relationship everywhere. Align \
+        every edge to another edge. A reading column no wider than 680px.
+        - **Hierarchy from space and type** before borders. A hairline (`--line`) to separate, a quiet fill \
+        (`--surface`) to group, never both, and never a card inside a card.
+        - **Every state is designed.** Empty (say what this is and offer the way in), working (something \
+        small says the agent is at it, and nothing can be sent twice), long (a long list, a long answer, a \
+        narrow window), and wrong (a missing file or field draws as empty, not as an error).
+        - **It feels alive.** Enter sends and Shift-Enter makes a line. The box has focus when the page \
+        opens. What's new scrolls into view. Changes ease over about 200ms. Bars and numbers move when \
+        memory changes.
+        - **Both appearances.** Check it in light and dark: the variables follow on their own, and any \
+        colour you add needs both.
+        - **Words are short and plain.** "Answer", not "Type your answer here…". No header repeating the \
+        app's name, no labels on what is obvious.
+
+        ### What gives a page away as generated
+
+        None of these: gradients and glows, emoji as icons, a purple accent for no reason, everything \
+        centred, a row of identical cards with an icon on each, a coloured left border on a card, shadows \
+        for decoration, a "Welcome to…" banner, three sizes of rounded corner. Icons are inline SVG with \
+        one stroke weight, or left out.
+
+        The starter interface.html already in the folder is a plain conversation done to these rules. Read it \
+        for how `yonka` is used, then design for the skill in front of you: don't hand back the starter.
         """
 }

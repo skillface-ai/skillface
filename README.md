@@ -13,18 +13,21 @@ is on screen, kept in memory, and tomorrow's session starts from where today's s
 
 ## The flow
 
-1. **New App.** Paste a skill, a link to one, or pick one Claude Code already has.
-2. **Interview.** The builder reads the skill and asks what only you can answer, one question at
-   a time, with the likely answers as buttons.
-3. **Design.** It writes the interface, and you see it beside the conversation, on sample data.
-4. **Adjust.** Say what to change until it's right, then press **Done**.
-5. **Implement.** It writes what the running app needs (which memory to keep, and how) and checks
+1. **Drop a skill** on home, paste one or a link to one, or pick one Claude Code already has.
+2. **Read.** The builder reads the skill and asks what only you can answer, one question at a
+   time, with the likely answers as buttons.
+3. **Draw.** It works out what kind of tool the skill is (a study tool, a review desk, a planner,
+   a console…) and draws three versions for that job. You see them live, side by side, on sample
+   data, and take one.
+4. **Shape.** Say what to change in the one you chose until it's right, then ship it.
+5. **Ship.** It writes what the running app needs (which memory to keep, and how) and checks
    its work. The app opens on its first session.
 
-After that, an app is three tabs: **Sessions** (every conversation, in the app's own interface),
-**Memory** (what it remembers, as files you can read and edit), and **Skill** (the skill, and
-what the builder added). **Edit Interface** goes back to the builder, in the session the app was
-built in, so it knows what's there and why.
+Home is that drop target with a dock of the apps you used last; **All apps** (⌘K) is the dock
+risen into a sheet, with the box to find one already taking the keyboard. An open app fills the
+window: its sessions run along the top as one lifeline, **What it knows** opens its memory beside
+it as files you can read and put right, and **Reshape** goes back to the builder, in the session
+the app was built in, so it knows what's there and why.
 
 ## How it works
 
@@ -37,6 +40,7 @@ An app is a folder in `~/Library/Application Support/Yonka/Apps/`:
 | `app.json` | Name, symbol, and how far the build is |
 | `interface.html` | What you see: one self-contained page |
 | `demo.json` | Sample memory and messages, for the design's preview |
+| `designs/` | The versions the builder drew to choose from |
 | `memory/` | What outlives every session |
 | `sessions/` | Every conversation, one JSON file each |
 

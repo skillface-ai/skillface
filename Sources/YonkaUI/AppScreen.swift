@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 import YonkaCore
 
-/// One app: being built, or in use, where it's its sessions, its memory and its skill.
+/// One app, open: being built, or in use, where its sessions run along the top as one
+/// lifeline and what it remembers opens beside it.
 struct AppScreen: View {
     @Bindable var model: AppModel
     let app: SkillApp
@@ -9,109 +11,164 @@ struct AppScreen: View {
     private var building: Bool { app.info.stage != .done }
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            HStack(spacing: 18) {
+                Button { model.selected = nil } label: {
+                    Label("Home", systemImage: "chevron.left").font(.system(size: 13)).foregroundStyle(Theme.dim).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Text(app.info.name).font(Theme.serif(19)).lineLimit(1).fixedSize()
+                if building {
+                    Steps(stage: app.info.stage)
+                    Spacer()
+                    // Nothing to ship until a version is chosen, or while it's still being made.
+                    if app.info.stage == .adjust || app.info.stage == .implement {
+                        Button { model.finish() } label: { Text("It's right. Ship it").pill(filled: true) }
+                            .buttonStyle(.plain)
+                            .disabled(model.buildSession.map { model.live[$0.id] != nil } ?? true)
+                    }
+                } else {
+                    Lifeline(model: model)
+                    Button { model.knowing.toggle() } label: { Text("What it knows").pill(on: model.knowing) }.buttonStyle(.plain)
+                    Button { model.editInterface() } label: { Text("Reshape").pill() }.buttonStyle(.plain)
+                        .help("Change how \(app.info.name) looks and works")
+                }
+                Menu {
+                    Button("Skill…") { model.showingSkill = true }
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([app.folder]) }
+                } label: {
+                    Image(systemName: "ellipsis").foregroundStyle(Theme.dim)
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            }
+            .padding(.leading, Theme.lights + 8).padding(.trailing, 18).frame(height: 52)
+
             if building {
                 BuilderView(model: model, app: app)
             } else {
-                switch model.tab {
-                case .sessions: SessionsPane(model: model)
-                case .memory:
-                    FilesPane(
-                        files: model.memory, symbol: "brain",
-                        empty: ("Nothing remembered yet", "What \(app.info.name) learns about you and your work appears here, and every session starts from it."),
-                        save: { model.save($1, as: $0, in: .memory) }, delete: model.forget)
-                case .skill:
-                    FilesPane(
-                        files: model.skillFiles, symbol: "doc.text", empty: ("No skill", ""),
-                        save: { model.save($1, as: $0, in: .skill) })
+                HStack(spacing: 14) {
+                    if let session = model.session {
+                        InterfaceView(html: model.interface, state: model.state(of: session), send: { model.send($0, in: session.id) }, failed: model.interfaceFailed)
+                            // A page is one session's, as one design drew it.
+                            .id(session.id + model.interface)
+                            .stage()
+                    }
+                    if model.knowing { Knows(model: model, app: app).transition(.move(edge: .trailing).combined(with: .opacity)) }
                 }
+                .padding([.horizontal, .bottom], 14)
+                .animation(.spring(duration: 0.35, bounce: 0.1), value: model.knowing)
             }
         }
-        .navigationTitle(app.info.name)
-        .toolbar {
-            if building {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Done") { model.finish() }
-                        .buttonStyle(.borderedProminent)
-                        // Nothing to call done until there's a design, or while it's still being made.
-                        .disabled(app.info.stage == .interview || app.info.stage == .design || model.buildSession.map { model.live[$0.id] != nil } ?? true)
-                        .help("The design is right: finish the app")
-                }
-            } else {
-                ToolbarItem(placement: .principal) {
-                    Picker("", selection: $model.tab) {
-                        ForEach(AppModel.Tab.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Edit Interface", systemImage: "paintbrush") { model.editInterface() }
-                        .help("Change how \(app.info.name) looks and works")
-                }
+        .sheet(isPresented: $model.showingSkill) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("The skill").font(Theme.serif(24))
+                FilesEditor(files: model.skillFiles, save: { model.save($1, as: $0, in: .skill) })
+                Button("Done") { model.showingSkill = false }.keyboardShortcut(.defaultAction).frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .padding(24).frame(width: 720, height: 600)
         }
     }
 }
 
-/// Every session down the side, and the one that's open in the app's own interface.
-private struct SessionsPane: View {
-    @Bindable var model: AppModel
+/// Where the build is: its four steps as words, the current one marked.
+private struct Steps: View {
+    let stage: SkillApp.Stage
+    private static let names: [(SkillApp.Stage, String)] = [(.interview, "Read"), (.design, "Draw"), (.adjust, "Shape"), (.implement, "Ship")]
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                Button { model.newSession() } label: {
-                    Label("New Session", systemImage: "square.and.pencil").frame(maxWidth: .infinity, alignment: .leading)
+        let current = Self.names.firstIndex { $0.0 == stage } ?? Self.names.count
+        HStack(spacing: 18) {
+            ForEach(Array(Self.names.enumerated()), id: \.offset) { index, step in
+                Text(step.1).font(Theme.serif(19))
+                    .foregroundStyle(index == current ? AnyShapeStyle(.primary) : AnyShapeStyle(index < current ? Theme.dim : Theme.rule))
+                    .padding(.bottom, 3)
+                    .overlay(alignment: .bottom) { Rectangle().fill(index == current ? Theme.accent : .clear).frame(height: 2) }
+            }
+        }
+        .padding(.leading, 10)
+        .animation(.easeInOut(duration: 0.25), value: stage)
+        .accessibilityElement()
+        .accessibilityLabel("Step \(min(current + 1, 4)) of 4: \(stage.rawValue)")
+    }
+}
+
+/// An app's sessions as one thread, oldest to newest: its life so far. The open one is lit.
+///
+/// ponytail: the last five are on the thread and the rest are in a menu. Make the thread
+/// scroll, or scale by time, once apps have long lives.
+private struct Lifeline: View {
+    @Bindable var model: AppModel
+    private static let shown = 5
+
+    var body: some View {
+        let chapters = Array(model.useSessions.reversed())
+        let earlier = chapters.dropLast(Self.shown)
+        HStack(spacing: 4) {
+            if !earlier.isEmpty {
+                Menu("Earlier") {
+                    ForEach(earlier.reversed()) { session in Button(label(session)) { model.sessionID = session.id } }
+                }
+                .menuStyle(.borderlessButton).fixedSize().font(Theme.label).foregroundStyle(Theme.dim)
+            }
+            ForEach(chapters.suffix(Self.shown)) { session in
+                let current = session.id == model.sessionID
+                Button { model.sessionID = session.id } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Capsule().fill(current ? Theme.accent : Theme.rule).frame(height: 4)
+                        HStack(spacing: 5) {
+                            if model.live[session.id] != nil { ProgressView().controlSize(.mini) }
+                            Text(label(session)).font(Theme.label).lineLimit(1).foregroundStyle(current ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.dim))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                Divider()
-                List(selection: $model.sessionID) {
-                    ForEach(model.useSessions) { session in
-                        SessionRow(session: session, working: model.live[session.id] != nil)
-                            .tag(session.id)
-                            .contextMenu { Button("Delete", role: .destructive) { model.delete(session) } }
-                    }
-                }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
+                .contextMenu { Button("Delete", role: .destructive) { model.delete(session) } }
             }
-            .frame(width: 240)
-            Divider()
-            if let session = model.session {
-                InterfaceView(html: model.interface, state: model.state(of: session), send: { model.send($0, in: session.id) }, failed: model.interfaceFailed)
-                    // A page is one session's, as one design drew it.
-                    .id(session.id + model.interface)
-            } else {
-                Color.clear
+            Button { model.newSession() } label: {
+                Text("+ New").font(.system(size: 12.5)).foregroundStyle(Theme.soft).padding(.horizontal, 12).frame(height: 28)
+                    .overlay { Capsule().strokeBorder(Theme.rule, style: StrokeStyle(lineWidth: 1, dash: [4, 3])) }.contentShape(Capsule())
             }
+            .buttonStyle(.plain).padding(.leading, 8)
         }
+        .padding(.horizontal, 10)
+    }
+
+    private func label(_ session: Session) -> String {
+        session.messages.isEmpty ? "New" : "\(session.updated.formatted(.dateTime.weekday(.abbreviated))) · \(session.title)"
     }
 }
 
-private struct SessionRow: View {
-    let session: Session
-    let working: Bool
+/// What the app remembers, beside it: the files every session starts from, to read and to put right.
+private struct Knows: View {
+    let model: AppModel
+    let app: SkillApp
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(session.title).lineLimit(1)
-            HStack(spacing: 6) {
-                if working { ProgressView().controlSize(.mini) }
-                Text(working ? "Answering" : session.updated.formatted(.relative(presentation: .named)))
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What it knows").font(Theme.serif(26))
+                Text("Every session starts from this. Change what's wrong.").foregroundStyle(Theme.dim)
             }
-            .font(.caption).foregroundStyle(.secondary)
+            if model.memory.isEmpty {
+                Text("Nothing yet. What \(app.info.name) learns about you and your work appears here.")
+                    .foregroundStyle(Theme.soft).frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                FilesEditor(files: model.memory, save: { model.save($1, as: $0, in: .memory) }, delete: model.forget)
+            }
+            Text("Kept as files on this Mac. Only this app's agent writes them.").font(Theme.label).foregroundStyle(Theme.dim)
         }
-        .padding(.vertical, 4)
+        .padding(22)
+        .frame(width: 380)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.line, lineWidth: 1) }
     }
 }
 
-/// Files down the side and the open one's text, which saves as it's typed: an app's memory,
-/// and its skill.
-struct FilesPane: View {
+/// A few files, one open at a time, saved as it's typed: an app's memory, and its skill.
+struct FilesEditor: View {
     let files: [TextFile]
-    let symbol: String
-    let empty: (title: String, detail: String)
     let save: (String, String) -> Void
     var delete: ((String) -> Void)?
 
@@ -121,27 +178,28 @@ struct FilesPane: View {
     private var text: String? { files.first { $0.name == selected }?.text }
 
     var body: some View {
-        Group {
-            if files.isEmpty {
-                ContentUnavailableView(empty.title, systemImage: symbol, description: Text(empty.detail))
-            } else {
-                HStack(spacing: 0) {
-                    List(files, selection: $selected) { file in
-                        Label(file.name, systemImage: "doc.text").lineLimit(1).tag(file.name)
-                            .contextMenu {
-                                if let delete { Button("Delete", role: .destructive) { delete(file.name) } }
-                            }
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(files) { file in
+                        let on = file.name == selected
+                        Button { selected = file.name } label: {
+                            Text(file.name).font(Theme.label).foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(Theme.dim))
+                                .padding(.horizontal, 10).frame(height: 26)
+                                .background(on ? Theme.raised : .clear, in: Capsule()).contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            if let delete { Button("Delete", role: .destructive) { delete(file.name) } }
+                        }
                     }
-                    .listStyle(.inset)
-                    .scrollContentBackground(.hidden)
-                    .frame(width: 240)
-                    Divider()
-                    TextEditor(text: $draft)
-                        .font(.system(.body, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 20).padding(.vertical, 16)
                 }
             }
+            TextEditor(text: $draft)
+                .font(.system(size: 12.5, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(10)
+                .background(Theme.ink, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .onAppear(perform: show)
         // The agent may have written it since.
