@@ -1,0 +1,64 @@
+import Foundation
+import Testing
+
+@testable import YonkaCore
+
+/// The whole flow with the real Claude Code, on the user's plan, so only when asked for:
+/// `YONKA_LIVE=<folder> YONKA_SKILL=<SKILL.md> swift test --filter Live`. It builds the skill
+/// into an app in that folder, answering each question with its first choice, then uses it in
+/// two sessions, and prints what was said. What it proves is that the second session starts
+/// from what the first one learned.
+struct LiveTests {
+    private static let folder = ProcessInfo.processInfo.environment["YONKA_LIVE"]
+
+    private func say(_ message: String, in id: String, of app: SkillApp, home: YonkaHome, agent: AgentProcess) async throws -> String {
+        let app = try #require(home.apps().first { $0.id == app.id })
+        let session = try #require(home.sessions(of: app).first { $0.id == id })
+        let turn = AgentTurn(
+            app: app, session: session, message: message, memory: home.memory(of: app),
+            skill: home.text(at: app.skill), rules: home.text(at: app.rules), plugin: home.plugin)
+        var reply = Reply()
+        for try await event in agent.events(for: turn) {
+            reply = reply.applying(event)
+            if case .doing(let what) = event { print("    · \(what)") }
+        }
+        try home.save(session.adding(.init(role: .user, text: message)).adding(.init(role: .assistant, text: reply.text)).begun(), in: app)
+        print("\n> \(message)\n\n\(reply.text)\n\(reply.error.map { "ERROR: \($0)" } ?? "")")
+        return reply.text
+    }
+
+    @Test(.enabled(if: folder != nil), .timeLimit(.minutes(30)))
+    func aSkillBecomesAnAppThatRemembers() async throws {
+        let home = YonkaHome(root: URL(fileURLWithPath: try #require(Self.folder)))
+        let agent = AgentProcess(errors: home.errors)
+        try BuilderSkills.write(to: home.plugin)
+        let skill = try String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["YONKA_SKILL"]), encoding: .utf8)
+        let app = try home.create(Skill(text: skill))
+        let build = try #require(app.info.buildSession)
+        func stage() -> SkillApp.Stage? { home.apps().first { $0.id == app.id }?.info.stage }
+
+        var said = try await say(Agent.begin, in: build, of: app, home: home, agent: agent)
+        for _ in 0..<6 where stage() == .interview || stage() == .design {
+            said = try await say(Choices.split(said).choices.first ?? "Whatever you think is best. Go on.", in: build, of: app, home: home, agent: agent)
+        }
+        #expect(stage() == .adjust)
+        #expect(home.text(at: app.interface) != Interface.starter)
+        _ = try await say(Agent.finish, in: build, of: app, home: home, agent: agent)
+        #expect(stage() == .done)
+        #expect(!home.text(at: app.rules).isEmpty)
+        #expect(home.memory(of: app).isEmpty, "the builder wrote into the user's memory")
+        #expect(home.text(at: app.skill) == skill.trimmingCharacters(in: .whitespacesAndNewlines))
+
+        let first = Session(kind: .use)
+        try home.save(first, in: app)
+        _ = try await say("Teach me binary search. Yes, teach me properly.", in: first.id, of: app, home: home, agent: agent)
+        _ = try await say("It halves a sorted list each step, so it takes about log2(n) steps. I've never implemented it though.", in: first.id, of: app, home: home, agent: agent)
+        #expect(!home.memory(of: app).isEmpty)
+        print("\nMEMORY: \(home.memory(of: app).map { "\n--- \($0.name)\n\($0.text)" }.joined())")
+
+        let second = Session(kind: .use)
+        try home.save(second, in: app)
+        let back = try await say("I'm back. Where were we?", in: second.id, of: app, home: home, agent: agent)
+        #expect(back.localizedCaseInsensitiveContains("binary search"))
+    }
+}

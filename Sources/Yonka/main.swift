@@ -1,0 +1,3 @@
+import YonkaUI
+
+YonkaApp.main()
