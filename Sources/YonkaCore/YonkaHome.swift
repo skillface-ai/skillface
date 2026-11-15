@@ -92,6 +92,18 @@ package struct YonkaHome: Sendable {
         try Data(design.html.utf8).write(to: app.interface, options: .atomic)
     }
 
+    /// A rough picture of each answer to the builder's question, in the answers' order: `1.html`,
+    /// `2.html`… as far as they run without a gap.
+    package func sketches(of app: SkillApp) -> [String] {
+        (1...9).lazy.map { try? String(contentsOf: app.sketches.appending(path: "\($0).html"), encoding: .utf8) }
+            .prefix { $0?.isEmpty == false }.compactMap { $0 }
+    }
+
+    /// Once a question is answered its sketches are gone, so the next question never shows them.
+    package func clearSketches(of app: SkillApp) {
+        try? Self.files.removeItem(at: app.sketches)
+    }
+
     // MARK: Files
 
     package func text(at url: URL) -> String {

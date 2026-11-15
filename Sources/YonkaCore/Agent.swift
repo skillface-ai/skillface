@@ -34,6 +34,16 @@ package enum Agent {
     /// And when they say the design is right.
     package static let finish = "That's right. Finish the app."
 
+    /// Why a turn failed, in words that say what to do. Claude Code's own are kept for anything
+    /// that isn't its sign-in.
+    package static func explain(_ error: String) -> String {
+        let signIn = ["authenticat", "oauth", "/login", "api key", "not logged in"]
+        if signIn.contains(where: error.lowercased().contains) {
+            return "Claude Code is signed out. Run claude in Terminal, sign in with /login, then try again."
+        }
+        return error.isEmpty ? "Claude Code couldn't finish that" : error
+    }
+
     package static func arguments(for turn: AgentTurn) -> [String] {
         let build = turn.session.kind == .build
         let tools = ["Read", "Write", "Edit", "Glob", "Grep"] + (build ? ["Skill"] : [])
@@ -88,7 +98,8 @@ package enum Agent {
         The build is four steps, each a skill of yours. Load a step's skill with the Skill tool as you reach it, and \
         write the step you are on to "stage" in app.json:
 
-        1. interview (yonka:interview): read the skill, then ask the user what only they can answer.
+        1. interview (yonka:interview): read the skill, then ask the user what only they can answer, with a \
+        rough sketch of each answer.
         2. design (yonka:design): work out what kind of tool this skill is, then draw three versions of its \
         interface, on sample data, for the user to choose from.
         3. adjust (yonka:adjust): change the one they chose until it's right. A user who comes back later to \
@@ -135,6 +146,9 @@ package enum AgentStream {
             guard delta?["type"] as? String == "text_delta", let text = delta?["text"] as? String else { return [] }
             return [.delta(text)]
         case "assistant":
+            // What Claude Code says itself when a turn fails ("Failed to authenticate…") comes as
+            // a message from a model called <synthetic>. It's the error, which `result` carries.
+            if (event["message"] as? [String: Any])?["model"] as? String == "<synthetic>" { return [] }
             return content.compactMap { block in
                 switch block["type"] as? String {
                 case "text": (block["text"] as? String).map(AgentEvent.said)
@@ -146,7 +160,7 @@ package enum AgentStream {
             return content.contains { $0["type"] as? String == "tool_result" } ? [.touched] : []
         case "result":
             let failed = event["is_error"] as? Bool == true
-            return [.done(error: failed ? (event["result"] as? String ?? "Claude Code couldn't finish that") : nil)]
+            return [.done(error: failed ? Agent.explain(event["result"] as? String ?? "") : nil)]
         default:
             return []
         }
@@ -244,7 +258,7 @@ package final class AgentProcess: Sendable {
                     for await _ in exited {}
                     if !finished, !Task.isCancelled {
                         let said = (try? String(contentsOf: errors, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        throw YonkaError(said.isEmpty ? "Claude Code stopped before it answered" : String(said.suffix(300)))
+                        throw YonkaError(said.isEmpty ? "Claude Code stopped before it answered" : Agent.explain(String(said.suffix(300))))
                     }
                     continuation.finish()
                 } catch {

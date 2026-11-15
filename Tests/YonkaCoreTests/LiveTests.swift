@@ -39,6 +39,10 @@ struct LiveTests {
         func stage() -> SkillApp.Stage? { home.apps().first { $0.id == app.id }?.info.stage }
 
         var said = try await say(Agent.begin, in: build, of: app, home: home, agent: agent)
+        // Its first question comes with a rough sketch of each answer.
+        print("\nSKETCHES: \(home.sketches(of: app).count) for \(Choices.split(said).choices.count) choices")
+        #expect(home.sketches(of: app).count == Choices.split(said).choices.count)
+        try? FileManager.default.copyItem(at: app.sketches, to: home.root.appending(path: "first-sketches"))
         for _ in 0..<6 where home.designs(of: app).isEmpty {
             said = try await say(Choices.split(said).choices.first ?? "Whatever you think is best. Go on.", in: build, of: app, home: home, agent: agent)
         }

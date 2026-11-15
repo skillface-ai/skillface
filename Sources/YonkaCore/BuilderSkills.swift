@@ -61,6 +61,25 @@ package enum BuilderSkills {
         Don't ask what has an obvious answer, don't ask about colours or fonts, and never ask a question whose \
         answer you would ignore. If the skill settles everything, ask one question, the one about what stays in view.
 
+        ## Sketch each answer
+
+        A question about a screen is hard to answer in words. So before you ask one, draw what each answer \
+        would look like: `sketches/1.html` for the first choice, `sketches/2.html` for the second, and so on, \
+        in the order you list the choices. Yonka shows the sketch for whichever answer the user points at, \
+        beside the question, marked as a rough idea. Write them in the same turn, then ask.
+
+        A sketch is a wireframe, not a design, and takes seconds:
+
+        - Under 40 lines of HTML and inline CSS. No script, no `yonka`, no real content.
+        - Blocks of `var(--surface)` on the page, each labelled with a word or two in `var(--mono)` at 11px: \
+        "question", "answer box", "skill map". A line or two of real words only where it helps, like the \
+        question itself in `var(--display)`.
+        - The part the question is about outlined in `var(--accent)`, so the eye goes to what differs \
+        between the sketches. Everything else is the same in all of them.
+        - The whole window: `body { display: flex; height: 100%; padding: 28px; gap: 16px }`.
+
+        Skip the sketches only for a question no picture would help with, like what a session is.
+
         ## Then, say what you'll build
 
         In three lines at most: what the screen is, what it remembers, what a session is. Then set "stage" to \
@@ -272,13 +291,21 @@ package enum BuilderSkills {
 
         ### The CSS it starts with
 
-        The system font at 15px, `box-sizing: border-box`, a body with no margin filling the window, and these, \
-        which follow light and dark on their own:
+        Yonka is dark, and an app is part of it: the page sits in Yonka's window, inside Yonka's own dark \
+        chrome, so it starts from Yonka's look and is always dark. There is no light mode to design for.
 
-        `--text` `--secondary` `--tertiary` (text, strongest first) · `--bg` (the page) · `--surface` (a quiet \
-        fill) · `--line` (a hairline) · `--accent` · `--radius`
+        You get the system sans at 15px, `box-sizing: border-box`, a body with no margin filling the window, \
+        headings already in the serif, and these:
 
-        Use them rather than colours of your own, so every app belongs on the same Mac.
+        - `--text` `--secondary` `--tertiary`: text, strongest first.
+        - `--bg` (the page, near black) · `--surface` (a quiet raised fill) · `--line` (a hairline).
+        - `--accent` (Yonka's vermilion) · `--on-accent` (text on a fill of it).
+        - `--display`: the serif. For what's said large: a question, a title, a big number.
+        - `--mono`: the monospace. For small labels, counts, dates, anything that's data.
+        - `--radius`.
+
+        Use them rather than colours and fonts of your own. A page that brings a white background or a \
+        different typeface looks pasted into the window.
 
         ## How it should look
 
@@ -294,13 +321,14 @@ package enum BuilderSkills {
         findings is a list with states, a plan is a board, a choice between a few things is buttons, a date \
         is a date. Each one acts by sending what the user would have typed.
         - **Give it the character of its job.** Set the character with the few things that carry it:
-          - *Type.* System sans for tools. `"New York", Georgia, serif` for reading and writing. \
-        `ui-monospace` for code, data and consoles. `ui-rounded` for something friendly. One family for \
-        text, at most one more for display or numbers.
+          - *Type.* Yonka's three voices, and how much of each. `--display` leads where the app is for \
+        reading, thinking and writing; the sans leads where it's for doing; `--mono` leads where it's for \
+        code, data and consoles. Every app uses all three a little: a serif line for the thing that \
+        matters, sans for the body, mono for the small labels.
           - *Density.* A console is tight (13px, 8px rhythm). A study tool or a journal is open (16–17px, \
         24px rhythm).
-          - *Accent.* One colour that suits the subject, set by redefining `--accent` (in both light and \
-        dark). Keep every other colour to the variables.
+          - *Accent.* `--accent` is for the one thing to press and the one thing that's current. An app \
+        may redefine it to a colour that suits its subject, as long as it's as bright on the dark page.
           - *Shape.* `--radius` small and square for exact tools, larger for soft ones.
 
         ### Craft
@@ -320,8 +348,8 @@ package enum BuilderSkills {
         - **It feels alive.** Enter sends and Shift-Enter makes a line. The box has focus when the page \
         opens. What's new scrolls into view. Changes ease over about 200ms. Bars and numbers move when \
         memory changes.
-        - **Both appearances.** Check it in light and dark: the variables follow on their own, and any \
-        colour you add needs both.
+        - **Dark, like the window around it.** Depth comes from `--bg`, then `--surface`, then a \
+        hairline, never from a shadow or a white card. Any colour you add has to read on near black.
         - **Words are short and plain.** "Answer", not "Type your answer here…". No header repeating the \
         app's name, no labels on what is obvious.
 

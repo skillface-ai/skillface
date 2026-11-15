@@ -36,7 +36,7 @@ package struct RootView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: model.notice)
-        // The room is always dark: it's the apps that are lit.
+        // Always dark, and every app in it with it.
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
     }

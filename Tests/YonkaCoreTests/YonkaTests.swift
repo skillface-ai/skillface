@@ -41,6 +41,7 @@ struct SkillTests {
     @Test func aGitHubPageIsItsFile() {
         let page = "https://github.com/janestreet/agent_skills/blob/master/socratic-tutor/SKILL.md"
         #expect(Skill.source(page)?.absoluteString == "https://raw.githubusercontent.com/janestreet/agent_skills/master/socratic-tutor/SKILL.md")
+        #expect(Skill.source(page + "#socratic-tutor")?.absoluteString == "https://raw.githubusercontent.com/janestreet/agent_skills/master/socratic-tutor/SKILL.md")
         #expect(Skill.source("https://example.com/SKILL.md")?.host() == "example.com")
         #expect(Skill.source("http://example.com/SKILL.md") == nil)
         #expect(Skill.source(tutor) == nil)
@@ -97,6 +98,18 @@ struct HomeTests {
         try home.use(designs[1], in: app)
         #expect(home.text(at: app.interface) == "<p>B</p>")
         #expect(Agent.chose(designs[0]) == "Use version A, Focus.")
+    }
+
+    @Test func sketchesAreTheOpenQuestionsAnswersInOrder() throws {
+        let home = temporaryHome()
+        let app = try home.create(Skill(text: tutor))
+        #expect(home.sketches(of: app).isEmpty)
+        try FileManager.default.createDirectory(at: app.sketches, withIntermediateDirectories: true)
+        // 4 is left over from a question with more answers: a gap ends the run.
+        for name in ["2", "1", "4"] { try Data("<p>\(name)</p>".utf8).write(to: app.sketches.appending(path: "\(name).html")) }
+        #expect(home.sketches(of: app) == ["<p>1</p>", "<p>2</p>"])
+        home.clearSketches(of: app)
+        #expect(home.sketches(of: app).isEmpty)
     }
 
     @Test func sessionsComeBackNewestFirst() throws {
@@ -183,6 +196,16 @@ struct AgentTests {
         #expect(AgentStream.events(from: #"{"type":"result","is_error":true,"result":"Out of credit"}"#) == [.done(error: "Out of credit")])
         #expect(AgentStream.events(from: #"{"type":"result","is_error":false,"result":"hi"}"#) == [.done(error: nil)])
         #expect(AgentStream.events(from: "not json").isEmpty)
+        // A failed sign-in is the turn's error, never something the agent said.
+        let failed = [
+            #"{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"Failed to authenticate: OAuth session expired and could not be refreshed"}]}}"#,
+            #"{"type":"result","is_error":true,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}"#,
+        ].flatMap(AgentStream.events)
+        #expect(failed == [.done(error: "Claude Code is signed out. Run claude in Terminal, sign in with /login, then try again.")])
+        #expect(failed.reduce(Reply()) { $0.applying($1) }.text.isEmpty)
+        let asked = Session(kind: .build).adding(.init(role: .user, text: "Build it"))
+        #expect(asked.unanswered == "Build it" && asked.retracting().messages.isEmpty)
+        #expect(asked.adding(.init(role: .assistant, text: "Done")).unanswered == nil)
     }
 
     /// Through a stand-in for Claude Code: these tests never spend anyone's plan.
@@ -206,10 +229,10 @@ struct AgentTests {
     @Test func aTurnThatDiesSaysWhy() async throws {
         let turn = try turn(.use)
         let script = turn.app.folder.appending(path: "claude")
-        try Data("#!/bin/sh\necho 'Not logged in' >&2\nexit 1\n".utf8).write(to: script)
+        try Data("#!/bin/sh\necho 'Disk is full' >&2\nexit 1\n".utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         let agent = AgentProcess(errors: turn.app.folder.appending(path: "errors.log")) { (script, "/usr/bin:/bin") }
-        await #expect(throws: YonkaError("Not logged in")) {
+        await #expect(throws: YonkaError("Disk is full")) {
             for try await _ in agent.events(for: turn) {}
         }
     }

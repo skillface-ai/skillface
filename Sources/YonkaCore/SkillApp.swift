@@ -9,6 +9,7 @@ import Foundation
 ///     interface.html   what the user sees
 ///     demo.json        sample memory and messages, for the design's preview
 ///     designs/         the versions the builder drew to choose from: `A.html`…, and `index.json`
+///     sketches/        a rough picture of each answer to the question being asked: `1.html`…
 ///     memory/          what outlives every session; the running agent's one folder
 ///     sessions/        every conversation, one JSON file each
 package struct SkillApp: Identifiable, Equatable, Sendable {
@@ -22,6 +23,7 @@ package struct SkillApp: Identifiable, Equatable, Sendable {
     package var interface: URL { folder.appending(path: "interface.html") }
     package var demo: URL { folder.appending(path: "demo.json") }
     package var designs: URL { folder.appending(path: "designs") }
+    package var sketches: URL { folder.appending(path: "sketches") }
     package var memory: URL { folder.appending(path: "memory") }
     package var sessions: URL { folder.appending(path: "sessions") }
 
@@ -119,6 +121,16 @@ package struct Session: Codable, Identifiable, Equatable, Sendable {
 
     package func adding(_ message: Message) -> Session {
         Session(id: id, kind: kind, created: created, updated: .now, messages: messages + [message], started: started)
+    }
+
+    /// What the user said last, if nothing answered it: a turn that failed, to be tried again.
+    package var unanswered: String? {
+        messages.last.flatMap { $0.role == .user ? $0.text : nil }
+    }
+
+    /// Without its last message.
+    package func retracting() -> Session {
+        Session(id: id, kind: kind, created: created, updated: updated, messages: Array(messages.dropLast()), started: started)
     }
 
     /// Once Claude Code has answered in it.

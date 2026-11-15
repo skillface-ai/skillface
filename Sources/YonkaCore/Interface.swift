@@ -65,18 +65,24 @@ package enum Interface {
     /// posted or framed.
     static let policy = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"
 
+    /// Yonka's own look, which every app starts from, so an app belongs in the room it's in:
+    /// always dark, a serif for what's said large, a monospace for small labels, one accent.
+    /// `Theme` has the same colours for the app around the page.
     static let css = """
-        :root { color-scheme: light dark; --text: #1d1d1f; --secondary: #6e6e73; --tertiary: #aeaeb2; --bg: #ffffff; \
-        --surface: #f5f5f7; --line: #e3e3e8; --accent: #0071e3; --radius: 12px }
-        @media (prefers-color-scheme: dark) { :root { --text: #f5f5f7; --secondary: #a1a1a6; --tertiary: #636366; \
-        --bg: #1e1e1e; --surface: #2c2c2e; --line: #3a3a3c; --accent: #2997ff } }
+        :root { color-scheme: dark; --text: #f2f3f5; --secondary: #a3a8b3; --tertiary: #6d7380; --bg: #15171b; \
+        --surface: #22252b; --line: #2a2e36; --accent: #ff6a47; --on-accent: #0c0d10; --radius: 14px; \
+        --display: ui-serif, "New York", "Iowan Old Style", Georgia, serif; \
+        --mono: ui-monospace, "SF Mono", Menlo, monospace }
         * { box-sizing: border-box }
         html, body { height: 100%; margin: 0 }
         body { font: 15px/1.5 -apple-system, system-ui, sans-serif; color: var(--text); background: var(--bg); \
         -webkit-font-smoothing: antialiased }
-        code, pre { font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace }
+        h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: -0.015em }
+        code, pre { font: 13px/1.5 var(--mono) }
         pre { background: var(--surface); padding: 12px 14px; border-radius: 8px; overflow-x: auto }
         button, input, textarea, select { font: inherit; color: inherit }
+        ::selection { background: rgba(255, 106, 71, 0.35) }
+        ::placeholder { color: var(--tertiary) }
         """
 
     /// `window.yonka`, run before the page's own scripts. `__yonka(state)` is how the app hands
@@ -159,13 +165,13 @@ package enum Interface {
           .message.user div { background: var(--surface); padding: 9px 15px; border-radius: 18px; max-width: 80%; white-space: pre-wrap }
           .message :is(p, ul, ol, pre) { margin: 0 0 10px }
           .message :last-child { margin-bottom: 0 }
-          .message :is(h1, h2, h3, h4) { font-size: 15px; font-weight: 600; margin: 18px 0 6px }
+          .message :is(h1, h2, h3, h4) { font-size: 19px; margin: 18px 0 6px }
           .empty { height: 100%; display: grid; place-content: center; text-align: center; color: var(--secondary) }
-          .empty h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); margin: 0 0 4px }
+          .empty h1 { font-size: 40px; letter-spacing: -0.025em; color: var(--text); margin: 0 0 6px }
           footer { padding: 4px 28px 24px }
-          #status { height: 22px; font-size: 13px; color: var(--secondary) }
+          #status { height: 22px; font: 11.5px var(--mono); color: var(--secondary) }
           #status.busy::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; vertical-align: middle }
-          textarea { display: block; width: 100%; resize: none; max-height: 180px; padding: 11px 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--bg); outline: none; transition: border-color 0.2s }
+          textarea { display: block; width: 100%; resize: none; max-height: 180px; padding: 11px 18px; border: 1px solid var(--line); border-radius: 22px; background: transparent; outline: none; transition: border-color 0.2s }
           textarea:focus { border-color: var(--accent) }
           @keyframes arrive { from { opacity: 0; transform: translateY(4px) } }
           @keyframes pulse { 50% { opacity: 0.25 } }

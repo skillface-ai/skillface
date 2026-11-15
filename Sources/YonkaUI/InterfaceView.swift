@@ -27,11 +27,10 @@ struct InterfaceView: NSViewRepresentable {
         configuration.userContentController.add(context.coordinator, name: "yonka")
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
-        // The page's own `--bg` is what shows, with no white flash before it in the dark.
+        // The page's own `--bg` is what shows, with no white flash before it.
         view.setValue(false, forKey: "drawsBackground")
-        // The room is always dark; an app is light or dark as the Mac is.
-        // ponytail: read once, so a page keeps its appearance until it's next opened.
-        view.appearance = NSApp.effectiveAppearance
+        // Yonka is always dark, and so is an app in it, whatever the Mac is set to.
+        view.appearance = NSAppearance(named: .darkAqua)
         context.coordinator.shown = state
         (context.coordinator.send, context.coordinator.failed) = (send, failed)
         view.loadHTMLString(Interface.page(html), baseURL: nil)

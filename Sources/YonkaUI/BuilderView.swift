@@ -11,6 +11,16 @@ struct BuilderView: View {
 
     private var busy: Bool { model.buildSession.map { model.live[$0.id] != nil } ?? false }
 
+    /// While a question is open and its answers are sketched: the one pointed at, and its sketch.
+    private var sketch: (choice: String, html: String)? {
+        guard app.info.stage == .interview, !busy, !model.sketches.isEmpty, let session = model.buildSession,
+              let last = session.messages.last, last.role == .assistant
+        else { return nil }
+        let choices = Choices.split(last.text).choices
+        let index = min(model.sketched, choices.count - 1, model.sketches.count - 1)
+        return index >= 0 ? (choices[index], model.sketches[index]) : nil
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -18,7 +28,9 @@ struct BuilderView: View {
                     ChatView(
                         messages: model.messages(of: session), busy: busy,
                         status: model.live[session.id]?.status ?? "",
-                        send: { model.send($0, in: session.id) }, stop: { model.stop(session.id) })
+                        send: { model.send($0, in: session.id) }, stop: { model.stop(session.id) },
+                        retry: session.unanswered == nil ? nil : { model.retry(session.id) },
+                        pointed: sketch == nil ? nil : model.sketched, point: { model.sketched = $0 })
                 }
             }
             .frame(width: 360)
@@ -29,6 +41,10 @@ struct BuilderView: View {
                     if model.choosing, let design = model.design {
                         Text("\(design.id) · \(design.name)").font(Theme.serif(20))
                         Text(design.idea).foregroundStyle(Theme.dim).lineLimit(1)
+                    } else if let sketch {
+                        Text("Sketch").font(Theme.serif(20))
+                        Text(sketch.choice).foregroundStyle(Theme.soft).lineLimit(1)
+                        Text("a rough idea, not the design").font(Theme.label).foregroundStyle(Theme.dim)
                     } else {
                         Text("Preview").font(Theme.serif(20))
                         Text("on sample data").foregroundStyle(Theme.dim)
@@ -40,7 +56,7 @@ struct BuilderView: View {
                     }
                 }
                 .font(.callout)
-                let html = model.choosing ? model.design?.html ?? model.interface : model.interface
+                let html = model.choosing ? model.design?.html ?? model.interface : sketch?.html ?? model.interface
                 InterfaceView(html: html, state: model.preview, failed: model.interfaceFailed)
                     .id(html)
                     .stage()
@@ -79,7 +95,7 @@ private struct Thumbnail: View {
                     .frame(width: Self.page.width, height: Self.page.height)
                     .scaleEffect(Self.scale)
                     .frame(width: Self.page.width * Self.scale, height: Self.page.height * Self.scale)
-                    .background(Color(nsColor: .textBackgroundColor))
+                    .background(Theme.panel)
                     .clipShape(shape)
                     .allowsHitTesting(false)
                     .padding(4)
@@ -102,6 +118,11 @@ struct ChatView: View {
     let status: String
     let send: (String) -> Void
     let stop: () -> Void
+    /// Set when what the user said last went unanswered.
+    var retry: (() -> Void)?
+    /// The answer whose sketch is showing, when the answers have sketches, and how to point at another.
+    var pointed: Int?
+    var point: (Int) -> Void = { _ in }
 
     @State private var draft = ""
     @FocusState private var focused: Bool
@@ -126,6 +147,9 @@ struct ChatView: View {
                                 Text(status.isEmpty ? "Thinking" : status).font(.callout).foregroundStyle(.secondary)
                             }
                         }
+                        if !busy, let retry {
+                            Button(action: retry) { Text("Try again").pill() }.buttonStyle(.plain)
+                        }
                         Color.clear.frame(height: 1).id("end")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,14 +160,17 @@ struct ChatView: View {
                 .onAppear { proxy.scrollTo("end", anchor: .bottom) }
             }
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(choices, id: \.self) { choice in
+                ForEach(Array(choices.enumerated()), id: \.offset) { index, choice in
                     Button { send(choice) } label: {
                         Text(choice).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 14).padding(.vertical, 9)
                             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.accent, lineWidth: pointed == index ? 1.5 : 0) }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    // Pointing at an answer shows its sketch; pressing it answers.
+                    .onHover { if $0 { point(index) } }
                 }
                 HStack(alignment: .bottom, spacing: 8) {
                     TextField(choices.isEmpty ? "Message" : "Or say something else", text: $draft, axis: .vertical)

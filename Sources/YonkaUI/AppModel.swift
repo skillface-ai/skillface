@@ -36,6 +36,9 @@ package final class AppModel {
     /// The versions the builder drew to choose from, and the one being looked at.
     package private(set) var designs: [Design] = []
     package var designID: String?
+    /// A rough picture of each answer to the builder's question, and the answer being pointed at.
+    package private(set) var sketches: [String] = []
+    package var sketched = 0
     package private(set) var skill = ""
     package private(set) var rules = ""
     package var notice: String?
@@ -95,7 +98,7 @@ package final class AppModel {
     package func refresh() {
         apps = home.apps()
         guard let app else {
-            (sessions, memory, interface, demo, skill, rules, designs) = ([], [], "", "", "", "", [])
+            (sessions, memory, interface, demo, skill, rules, designs, sketches) = ([], [], "", "", "", "", [], [])
             if selected != nil { selected = nil }
             return
         }
@@ -103,6 +106,7 @@ package final class AppModel {
         memory = home.memory(of: app)
         (interface, demo) = (home.text(at: app.interface), home.text(at: app.demo))
         designs = home.designs(of: app)
+        sketches = home.sketches(of: app)
         (skill, rules) = (home.text(at: app.skill), home.text(at: app.rules))
         // An app in use always has a session to type into.
         if app.info.stage == .done, session == nil {
@@ -208,6 +212,14 @@ package final class AppModel {
         refresh()
     }
 
+    /// Says again what a failed turn left unanswered.
+    package func retry(_ id: String) {
+        guard let app, live[id] == nil, let session = sessions.first(where: { $0.id == id }), let text = session.unanswered else { return }
+        attempt { try home.save(session.retracting(), in: app) }
+        refresh()
+        send(text, in: id)
+    }
+
     package func stop(_ session: String) {
         tasks[session]?.cancel()
     }
@@ -219,6 +231,11 @@ package final class AppModel {
         guard let app, !text.isEmpty, live[id] == nil, let asked = sessions.first(where: { $0.id == id }) else { return }
         let session = asked.adding(Session.Message(role: .user, text: text))
         do { try home.save(session, in: app) } catch { return notice = error.localizedDescription }
+        // The question they were for is answered.
+        if asked.kind == .build {
+            home.clearSketches(of: app)
+            sketched = 0
+        }
         // The turn carries the session as Claude Code has it: `started` says whether to resume.
         let turn = AgentTurn(app: app, session: asked, message: text, memory: memory, skill: skill, rules: rules, plugin: home.plugin)
         live[id] = Live(text: "", status: "")

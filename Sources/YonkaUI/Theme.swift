@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import YonkaCore
 
-/// Yonka's own look: a dark room where the apps are what's lit. A serif for what it says, a
-/// monospace for small labels, one accent. An app's own interface is not this: it's the app's.
+/// Yonka's own look: dark, a serif for what it says, a monospace for small labels, one accent.
+/// An app's page starts from the same (`Interface.css`), so it belongs in the window around it.
 enum Theme {
     static let ink = Color(red: 0.047, green: 0.051, blue: 0.063)
     static let panel = Color(red: 0.082, green: 0.090, blue: 0.106)
@@ -25,7 +25,8 @@ extension View {
     /// The content, lifted off the room: rounded, with a hairline.
     func stage() -> some View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-        return background(Color(nsColor: .textBackgroundColor))
+        // The page's own `--bg`, so nothing shows through before it loads.
+        return background(Theme.panel)
             .clipShape(shape)
             .overlay { shape.strokeBorder(Theme.line, lineWidth: 1) }
     }

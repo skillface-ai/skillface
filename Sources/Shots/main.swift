@@ -33,10 +33,15 @@ MainActor.assumeIsolated {
         // `swift run shots <dir> <home>`: a real home's first app instead, as it stands.
         if let real = CommandLine.arguments.dropFirst(2).first {
             let model = AppModel(home: YonkaHome(root: URL(fileURLWithPath: real)))
+            draw(model, "home", into: out)
+            model.selected = model.recent.first?.id
             draw(model, "app", into: out)
-            draw(model, "app-dark", appearance: .darkAqua, into: out)
-            model.editInterface()
-            return draw(model, "app-preview", into: out)
+            // Each answer's sketch, where a question is open.
+            for index in model.sketches.indices.dropFirst() {
+                model.sketched = index
+                draw(model, "app-sketch-\(index + 1)", into: out)
+            }
+            return
         }
         let home = YonkaHome(root: FileManager.default.temporaryDirectory.appending(path: "yonka-shots-\(UUID().uuidString)"))
         draw(AppModel(home: home), "1-home-empty", into: out)
@@ -53,6 +58,14 @@ MainActor.assumeIsolated {
             - [ ] Only the question, and the map when I ask
             - [ ] The map on top, the conversation under it
             """)), in: app)
+        try FileManager.default.createDirectory(at: app.sketches, withIntermediateDirectories: true)
+        let sketch = { (map: String) in """
+            <style>body { display: flex; height: 100%; padding: 28px; gap: 16px } .b { background: var(--surface); border-radius: var(--radius); padding: 14px; font: 11px var(--mono); color: var(--secondary) } .q { flex: 1; display: flex; flex-direction: column; gap: 16px } h2 { font-size: 26px; margin: 0 } .hot { outline: 1.5px solid var(--accent) }</style>
+            <div class="q"><div class="b" style="flex: 1">question<h2>What does the compiler infer here?</h2></div><div class="b">answer box</div></div>\(map)
+            """ }
+        for (index, map) in [#"<div class="b hot" style="width: 260px">skill map</div>"#, "", #"<div class="b hot" style="width: 60px">map</div>"#].enumerated() {
+            try Data(sketch(map).utf8).write(to: app.sketches.appending(path: "\(index + 1).html"))
+        }
         draw(open(app, in: home), "2-read", into: out)
 
         // The builder drew three versions: the user is choosing.
