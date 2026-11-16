@@ -109,6 +109,8 @@ MainActor.assumeIsolated {
         draw(wall, "7-home", into: out)
         wall.showingAll = true
         draw(wall, "8-all-apps", into: out)
+        wall.arranging = true
+        draw(wall, "9-all-apps-loose", into: out)
     }
 
     /// The model as it is with that app open.

@@ -112,6 +112,26 @@ struct HomeTests {
         #expect(home.sketches(of: app).isEmpty)
     }
 
+    @Test func appsStayWhereTheUserPutThem() throws {
+        let home = temporaryHome()
+        let made = try ["Bravo", "Alpha", "Charlie"].map { try home.create(Skill(text: "# \($0)\n\nDo it.")) }
+        #expect(YonkaHome.arranged(home.apps(), by: home.arrangement()).map(\.info.name) == ["Alpha", "Bravo", "Charlie"])
+        let ids = home.apps().map(\.id)
+        #expect(YonkaHome.moving(ids[2], to: ids[0], in: ids) == [ids[2], ids[0], ids[1]])
+        #expect(YonkaHome.moving(ids[0], to: ids[2], in: ids) == [ids[1], ids[2], ids[0]])
+        #expect(YonkaHome.moving("gone", to: ids[0], in: ids) == ids)
+        // One that's gone is passed over, and one made since comes after.
+        try home.arrange([ids[2], "gone", ids[0]])
+        #expect(YonkaHome.arranged(home.apps(), by: home.arrangement()).map(\.info.name) == ["Charlie", "Alpha", "Bravo"])
+
+        // A new name is one line, and the folder is the one it was made with.
+        try home.save(made[0].info.named("  Bravo\nTwo  "), of: made[0])
+        let renamed = try #require(home.apps().first { $0.id == made[0].id })
+        #expect(renamed.info.name == "Bravo Two" && renamed.info.stage == made[0].info.stage)
+        #expect(renamed.info.named(" \n ") == renamed.info)
+        #expect(renamed.info.named(String(repeating: "a", count: 200)).name.count == 60)
+    }
+
     @Test func sessionsComeBackNewestFirst() throws {
         let home = temporaryHome()
         let app = try home.create(Skill(text: tutor))

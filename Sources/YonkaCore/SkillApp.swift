@@ -58,6 +58,15 @@ package struct SkillApp: Identifiable, Equatable, Sendable {
 
         package func at(_ stage: Stage) -> Info { Info(name: name, symbol: symbol, stage: stage, buildSession: buildSession) }
         package func built(in session: String) -> Info { Info(name: name, symbol: symbol, stage: stage, buildSession: session) }
+
+        /// As the user renamed it: one line, not too long, and never nothing. Only what it's
+        /// called changes; its folder keeps the name it was made with.
+        package func named(_ name: String) -> Info {
+            let line = name.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            return line.isEmpty ? self : Info(name: String(line.prefix(Self.nameLimit)), symbol: symbol, stage: stage, buildSession: buildSession)
+        }
+
+        static let nameLimit = 60
     }
 }
 

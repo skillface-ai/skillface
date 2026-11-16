@@ -70,6 +70,34 @@ package struct YonkaHome: Sendable {
         try Self.files.trashItem(at: app.folder, resultingItemURL: nil)
     }
 
+    // MARK: The user's arrangement
+
+    /// All Apps as the user arranged it: the apps' ids, in order.
+    private var arrangementFile: URL { root.appending(path: "arrangement.json") }
+
+    /// Empty until they've moved one. Only ever matched against the apps there are.
+    package func arrangement() -> [String] {
+        (try? JSONDecoder().decode([String].self, from: Data(contentsOf: arrangementFile))) ?? []
+    }
+
+    package func arrange(_ ids: [String]) throws {
+        try JSONEncoder().encode(ids).write(to: arrangementFile, options: .atomic)
+    }
+
+    /// The apps in the user's order. One made since they arranged them comes after, by name.
+    package static func arranged(_ apps: [SkillApp], by ids: [String]) -> [SkillApp] {
+        let place = Dictionary(ids.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        let placed = apps.enumerated().map { (app: $1, at: place[$1.id] ?? ids.count + $0) }
+        return placed.sorted { $0.at < $1.at }.map(\.app)
+    }
+
+    /// `ids` with one in another's place, and those between making way.
+    package static func moving(_ id: String, to target: String, in ids: [String]) -> [String] {
+        guard let from = ids.firstIndex(of: id), let to = ids.firstIndex(of: target), from != to else { return ids }
+        let rest = ids.filter { $0 != id }
+        return Array(rest[..<to]) + [id] + rest[to...]
+    }
+
     // MARK: Designs
 
     /// The versions the builder drew, in order. Each is an `.html` in `designs/`; `index.json`

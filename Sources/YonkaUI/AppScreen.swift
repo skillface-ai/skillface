@@ -7,6 +7,7 @@ import YonkaCore
 struct AppScreen: View {
     @Bindable var model: AppModel
     let app: SkillApp
+    @State private var deleting: SkillApp?
 
     private var building: Bool { app.info.stage != .done }
 
@@ -36,6 +37,8 @@ struct AppScreen: View {
                 Menu {
                     Button("Skill…") { model.showingSkill = true }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([app.folder]) }
+                    Divider()
+                    Button("Delete…", role: .destructive) { deleting = app }
                 } label: {
                     Image(systemName: "ellipsis").foregroundStyle(Theme.dim)
                 }
@@ -59,6 +62,7 @@ struct AppScreen: View {
                 .animation(.spring(duration: 0.35, bounce: 0.1), value: model.knowing)
             }
         }
+        .confirmsDeleting($deleting, in: model)
         .sheet(isPresented: $model.showingSkill) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("The skill").font(Theme.serif(24))

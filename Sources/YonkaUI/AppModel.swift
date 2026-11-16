@@ -20,10 +20,17 @@ package final class AppModel {
     private let agent: AgentProcess
 
     package private(set) var apps: [SkillApp] = []
+    /// The apps' ids in the order the user put them. Read from the disk like the rest, and kept
+    /// here because a move changes nothing else: the same apps, so no screen would hear of it.
+    package private(set) var arrangement: [String] = []
     /// The app that's open. Nil is home.
     package var selected: String? { didSet { if selected != oldValue { open() } } }
     /// Home's sheet of every app.
-    package var showingAll = false
+    package var showingAll = false { didSet { if !showingAll { (arranging, renaming) = (false, nil) } } }
+    /// All Apps with its apps loose: to be moved, deleted and renamed.
+    package var arranging = false
+    /// The app whose name is being typed.
+    package var renaming: String?
     /// An open app's memory, beside it.
     package var knowing = false
     package var showingSkill = false
@@ -51,7 +58,7 @@ package final class AppModel {
         self.home = home
         self.agent = agent ?? AgentProcess(errors: home.errors)
         attempt { try BuilderSkills.write(to: home.plugin) }
-        apps = home.apps()
+        (apps, arrangement) = (home.apps(), home.arrangement())
     }
 
     // MARK: What's showing
@@ -61,6 +68,9 @@ package final class AppModel {
     package var recent: [SkillApp] {
         apps.map { ($0, home.lastUsed($0)) }.sorted { $0.1 > $1.1 }.map(\.0)
     }
+    /// Every app, in the order the user put them, if they have.
+    package var arranged: [SkillApp] { YonkaHome.arranged(apps, by: arrangement) }
+    package var hasArrangement: Bool { !arrangement.isEmpty }
     package var useSessions: [Session] { sessions.filter { $0.kind == .use } }
     package var session: Session? { useSessions.first { $0.id == sessionID } }
     package var buildSession: Session? { sessions.first { $0.id == app?.info.buildSession } }
@@ -96,7 +106,7 @@ package final class AppModel {
 
     /// Reads the selected app again: what the user changed, or its agent did.
     package func refresh() {
-        apps = home.apps()
+        (apps, arrangement) = (home.apps(), home.arrangement())
         guard let app else {
             (sessions, memory, interface, demo, skill, rules, designs, sketches) = ([], [], "", "", "", "", [], [])
             if selected != nil { selected = nil }
@@ -141,6 +151,18 @@ package final class AppModel {
         for session in home.sessions(of: app) { stop(session.id) }
         attempt { try home.delete(app) }
         if selected == app.id { selected = nil }
+        refresh()
+    }
+
+    /// One app takes another's place in `shown`, the order they're in on screen, which becomes
+    /// the user's arrangement.
+    package func move(_ id: String, to target: String, in shown: [SkillApp]) {
+        attempt { try home.arrange(YonkaHome.moving(id, to: target, in: shown.map(\.id))) }
+        refresh()
+    }
+
+    package func rename(_ app: SkillApp, to name: String) {
+        attempt { try home.save(app.info.named(name), of: app) }
         refresh()
     }
 
