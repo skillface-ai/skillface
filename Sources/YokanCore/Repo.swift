@@ -12,6 +12,8 @@ package struct Repo: Equatable, Sendable {
 
     /// What GitHub will send whole. A repository of skills is text, and far under this.
     static let limit = 50_000_000
+    /// And how much one may unpack to.
+    static let unpacked = 500_000_000
 
     /// From `https://github.com/owner/name`, with or without `/tree/<ref>/<folder>`. Nil for
     /// anything else, a file's page among them: that is one skill, which `Skill.source` reads.
@@ -56,7 +58,9 @@ package struct Repo: Equatable, Sendable {
         guard size <= Self.limit else { throw YokanError("\(owner)/\(name) is too big to make an app from: over 50 MB") }
         try Self.unpack(file, into: folder)
         let linked = folder.appending(path: path)
-        guard (try? linked.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+        // A link in the archive could make the path lead anywhere on this Mac: it has to end inside.
+        let inside = path.isEmpty || linked.resolvingSymlinksInPath().path.hasPrefix(folder.resolvingSymlinksInPath().path + "/")
+        guard inside, (try? linked.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
             throw YokanError("\(owner)/\(name) has no folder \(path)")
         }
         return linked
@@ -66,13 +70,15 @@ package struct Repo: Equatable, Sendable {
     /// folder. The Mac's own tar leaves out anything that would land outside `folder`; what it
     /// unpacks is still a stranger's, and `YokanHome.create(from:named:)` takes only plain files.
     ///
-    /// ponytail: only the download is measured, not what it unpacks to. Count the bytes as they
-    /// come out if someone's repository is ever a bomb.
-    static func unpack(_ archive: URL, into folder: URL) throws {
+    /// A small download can unpack to something enormous, so no more than `unpacked` bytes are
+    /// let out of it: past that the pipe closes and the unpacking fails.
+    static func unpack(_ archive: URL, into folder: URL, limit: Int = unpacked) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let tar = Process()
-        tar.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-        tar.arguments = ["-xzf", archive.path, "-C", folder.path, "--strip-components", "1"]
+        tar.executableURL = URL(fileURLWithPath: "/bin/bash")
+        // The paths go in as arguments, never into the script.
+        let script = #"set -o pipefail; /usr/bin/gunzip -c "$1" | /usr/bin/head -c "$3" | /usr/bin/tar -xf - -C "$2" --strip-components 1"#
+        tar.arguments = ["-c", script, "unpack", archive.path, folder.path, String(limit)]
         (tar.standardInput, tar.standardOutput, tar.standardError) = (FileHandle.nullDevice, FileHandle.nullDevice, FileHandle.nullDevice)
         try tar.run()
         tar.waitUntilExit()

@@ -47,6 +47,21 @@ package enum Agent {
     package static func chose(_ design: Design) -> String { "Use version \(design.id), \(design.name)." }
     /// And when they say the design is right.
     package static let finish = "That's right. Finish the app."
+    /// What an app's agent ends a message with when it needs to run a command and may not, so
+    /// Yokan asks the user for it. Only ever a request: the answer is the user's, in a dialog.
+    package static let asks = "[[terminal]]"
+    /// And what it's sent for the user once they've said yes.
+    package static let allowed = "You can run commands now. Go on."
+
+    /// The switch's name in the app's menu. An app built before the mark has an APP.md that sends
+    /// the user there, and an agent that follows it: naming the switch is asking too.
+    package static let switchName = "Use the Terminal"
+
+    /// A reply without that mark, and whether it asked.
+    package static func asking(_ text: String) -> (text: String, asks: Bool) {
+        let said = text.replacingOccurrences(of: asks, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return (said, text.contains(asks) || text.localizedCaseInsensitiveContains(switchName))
+    }
 
     /// Why a turn failed, in words that say what to do. Claude Code's own are kept for anything
     /// that isn't its sign-in.
@@ -60,7 +75,9 @@ package enum Agent {
 
     package static func arguments(for turn: AgentTurn) -> [String] {
         let build = turn.session.kind == .build
-        let tools = ["Read", "Write", "Edit", "Glob", "Grep"] + (build ? ["Skill"] : []) + (turn.runs ? ["Bash"] : [])
+        // An app's agent may hand work to subagents, as skills often say to. They are held to the
+        // same tools, the same folders and the same sandbox, so they add nothing it couldn't do.
+        let tools = ["Read", "Write", "Edit", "Glob", "Grep"] + (build ? ["Skill"] : ["Agent"]) + (turn.runs ? ["Bash"] : [])
         let session = turn.session.started ? ["--resume", turn.session.id] : ["--session-id", turn.session.id]
         // An app made from a repository reads its skills there as it needs them. The builder
         // is already in the folder that holds it. Claude Code would let it write there too:
@@ -76,11 +93,17 @@ package enum Agent {
 
     /// What the user's secrets are kept in, which no command may read.
     /// ponytail: a short list of the usual places. A command can read the rest of the disk, and
-    /// with no network has nowhere to send it. Deny reading the home folder if that isn't enough.
+    /// with only `registries` to reach has nowhere to send it. Deny reading the home folder if that isn't enough.
     static let secrets = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gh", "~/.netrc", "~/Library/Keychains"]
 
+    /// The only hosts a command can reach: where Python's packages come from, so an app installs
+    /// what its skill needs, into `work/`, without the user. Nothing can be sent to either.
+    /// ponytail: Python only. A registry that also takes uploads on the same host (npm's does) is a
+    /// way out for what a command read, so add one only after checking that.
+    static let registries = ["pypi.org", "files.pythonhosted.org"]
+
     /// Claude Code's settings for an app that runs commands: every one in its sandbox, with no
-    /// way out of it. That leaves no network, and writing only where the agent works (memory)
+    /// way out of it. That leaves no network but `registries`, and writing only where the agent works (memory)
     /// and in `work/`, and no launching anything outside it: `open` and Apple Events are refused,
     /// which is what keeps a script it wrote from running unsandboxed. Don't add `allowAppleEvents`
     /// or `excludedCommands`. `source/` is a folder it was added, so it's taken back by name: read-only
@@ -89,6 +112,7 @@ package enum Agent {
         let settings: [String: Any] = ["sandbox": [
             "enabled": true, "failIfUnavailable": true, "autoAllowBashIfSandboxed": true, "allowUnsandboxedCommands": false,
             "filesystem": ["denyWrite": [turn.app.source.path], "denyRead": secrets],
+            "network": ["allowedDomains": registries],
         ]]
         // Nothing here can fail to encode. If it did, "{}" has no sandbox, so Bash is denied.
         return (try? JSONSerialization.data(withJSONObject: settings)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
@@ -98,17 +122,28 @@ package enum Agent {
     private static func commands(for turn: AgentTurn) -> String {
         guard turn.runs else {
             return """
-                You can't run commands or go to the web. Where a skill would, do the thinking yourself and say \
-                exactly what the user has to run. The user can also let this app run commands itself: Use the \
-                Terminal, in the app's ••• menu. Say so the first time a skill needs it.
+                You can't run commands yet, or go to the web. When a skill needs a command run, don't tell the \
+                user to run it and don't send them to a menu: say in a sentence what you need to run, and end \
+                your message with a line that is exactly \(asks). Yokan then asks the user to let this app run \
+                commands, and you are told if they do, in this same session: never ask for a new session or \
+                for a menu, whatever <app> or an earlier message says. If they don't, do the thinking yourself \
+                and say exactly what they have to run.
                 """
         }
         return """
-            The user let this app run commands, so you have Bash, in a sandbox: no network, and a command can \
-            write only in memory and in \(turn.app.work.path). Run what a skill says to run, yourself, in that \
-            folder (`cd` there first), and keep memory for what's worth remembering, not for what commands \
-            make. What needs the network, like installing something, you can't do: give the user the exact \
-            command to run in their own Terminal, then carry on. The sandbox can't open a file or an app either \
+            The user let this app run commands, so you have Bash, in a sandbox: no network but PyPI, and a command \
+            can write only in memory and in \(turn.app.work.path). Run what a skill says to run, yourself, in \
+            that folder (`cd` there first), and keep memory for what's worth remembering, not for what commands \
+            make. Install the Python packages a skill needs yourself, without asking: make a virtual environment \
+            there once (`python3 -m venv .venv`), `pip install` into it, and run everything with its python. \
+            Check first what is already on this Mac. So a `pip install` is yours to run, never the user's. What pip can't give (Homebrew, a system tool, \
+            anything the sandbox refuses that the work truly needs) you ask for, and never tell the user to run \
+            it themselves: say in a sentence what the command does and why, then end your message with the one \
+            command between a line that is exactly \(Command.open) and a line that is exactly \(Command.close). \
+            Yokan shows it to the user, and if they approve runs it on their Mac, outside the sandbox, from \
+            the work folder, and tells you how it ended. One command a message, as short and plain as it can \
+            be, since the user reads it before saying yes. It can't answer questions, only a password \
+            dialog, so give it the flags that keep it from asking. The sandbox can't open a file or an app either \
             (`open` and AppleScript fail): when a command makes something to look at, a video or a picture, \
             give its full path, and say Show in Finder in the app's ••• menu leads to it, in work.
             """
@@ -146,6 +181,11 @@ package enum Agent {
 
             \(rules.isEmpty ? "" : "<app>\n\(rules)\n</app>\n")
             ## Commands
+
+            This section is how this app runs and installs things now. It holds over <app>, over a skill, and \
+            over anything said earlier in this session: where one of those says you can't run or install \
+            something, or that the user must run a command in their own Terminal, that was written before the \
+            app could, and no longer holds. Don't repeat an earlier answer about what's missing: act on it.
 
             \(commands(for: turn))
 
@@ -258,6 +298,7 @@ package enum AgentStream {
         case "Edit": "Changing \(file)"
         case "Read": "Reading \(file)"
         case "Skill": "Getting ready"
+        case "Agent": "Handing work to a helper"
         case "Bash": "Running " + ((input["description"] as? String).map { "“\($0.prefix(60))”" } ?? "a command")
         default: "Looking through its files"
         }

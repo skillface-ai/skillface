@@ -80,6 +80,9 @@ package struct YokanHome: Sendable {
         let id = ([slug] + (2...999).map { "\(slug)-\($0)" }).first { !taken.contains($0) } ?? UUID().uuidString.lowercased()
         let build = Session(kind: .build)
         let app = SkillApp(id: id, folder: appsFolder.appending(path: id), info: SkillApp.Info(name: name, buildSession: build.id))
+        // An id can come round again, after an app is removed in the Finder: what that one was
+        // allowed is not this one's.
+        try allow(app, toRun: false)
         try Self.files.createDirectory(at: app.memory, withIntermediateDirectories: true)
         try Self.files.createDirectory(at: app.sessions, withIntermediateDirectories: true)
         try Data(Interface.starter.utf8).write(to: app.interface)
@@ -173,6 +176,7 @@ package struct YokanHome: Sendable {
     }
 
     package func allow(_ app: SkillApp, toRun: Bool) throws {
+        guard runs(app) != toRun else { return }
         let others = ((try? JSONDecoder().decode([String].self, from: Data(contentsOf: runnersFile))) ?? []).filter { $0 != app.id }
         try JSONEncoder().encode(others + (toRun ? [app.id] : [])).write(to: runnersFile, options: .atomic)
     }

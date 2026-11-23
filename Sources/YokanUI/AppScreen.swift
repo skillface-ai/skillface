@@ -8,7 +8,6 @@ struct AppScreen: View {
     @Bindable var model: AppModel
     let app: SkillApp
     @State private var deleting: SkillApp?
-    @State private var allowing = false
 
     private var building: Bool { app.info.stage != .done }
 
@@ -39,7 +38,7 @@ struct AppScreen: View {
                     Button(model.skills.isEmpty ? "Skill…" : "Skills…") { model.showingSkill = true }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([app.folder]) }
                     // Turning it on is asked about: turning it off never is.
-                    Toggle("Use the Terminal", isOn: Binding(get: { model.terminal }, set: { if $0 { allowing = true } else { model.allowTerminal(false) } }))
+                    Toggle(Agent.switchName, isOn: Binding(get: { model.terminal }, set: { if $0 { model.allowing = true } else { model.allowTerminal(false) } }))
                     Divider()
                     Button("Delete…", role: .destructive) { deleting = app }
                 } label: {
@@ -66,10 +65,25 @@ struct AppScreen: View {
             }
         }
         .confirmsDeleting($deleting, in: model)
-        .confirmationDialog("Let \(app.info.name) run commands on this Mac?", isPresented: $allowing) {
+        .confirmationDialog("Let \(app.info.name) run commands on this Mac?", isPresented: $model.allowing) {
             Button("Let It") { model.allowTerminal(true) }
         } message: {
-            Text("It runs what its skill says to, without asking each time, in a sandbox: no network, and it can write only in its own memory and work folder. It can read most other files on this Mac.")
+            Text("It runs what its skill says to, without asking each time, in a sandbox: it can download Python packages and reach nothing else on the network, and it can write only in its own memory and work folder. It can read most other files on this Mac.")
+        }
+        .sheet(item: $model.proposed) { proposal in
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Run this on your Mac?").font(Theme.serif(24))
+                Text("\(app.info.name) asks for it. It runs outside the sandbox, as you, with nothing held back: read it first.").foregroundStyle(Theme.dim)
+                ScrollView { Text(proposal.command.text).font(.system(size: 13, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(12) }
+                    .background(Theme.ink, in: RoundedRectangle(cornerRadius: 8))
+                HStack {
+                    Spacer()
+                    // No default: Return shouldn't run a stranger's command.
+                    Button("Don't Run") { model.answer(proposal, run: false) }.keyboardShortcut(.cancelAction)
+                    Button("Run") { model.answer(proposal, run: true) }
+                }
+            }
+            .padding(24).frame(width: 560, height: 320).interactiveDismissDisabled()
         }
         .sheet(isPresented: $model.showingSkill) {
             VStack(alignment: .leading, spacing: 14) {

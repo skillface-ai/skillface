@@ -51,15 +51,16 @@ An app is a folder in `~/Library/Application Support/Yokan/Apps/`:
 Both agents are your own [Claude Code](https://claude.com/claude-code), run headless and
 contained: no shell, no web, none of your settings. The builder works in the app's folder with
 six skills (`explore`, for a repository, then `interview`, `design`, `adjust`, `implement`, and
-`interface`, the contract a page is written to). The app's own agent works in `memory/` and
+`interface`, the contract a page is written to). The app's own agent, and any subagents it hands work to, work in `memory/` and
 nowhere else, so using an app can never change its skill or its interface. An app made from a
 repository is told which skills it has and reads each from `source/` when its turn comes. Each session is a Claude Code session, resumed message by
 message; a new one is started with the skill, `APP.md`, and the memory as it stands.
 
 A skill that runs scripts needs a shell. An app gets one only when you turn on **Use the
-Terminal** in its ••• menu, and then inside Claude Code's sandbox: no network, and it can write
-only in its `memory/` and `work/`. It can read most other files on your Mac. Whatever a script
-needs installed, you install yourself.
+Terminal** in its ••• menu, and then inside Claude Code's sandbox: no network but PyPI, for the Python packages a skill needs, and it can write
+only in its `memory/` and `work/`. It can read most other files on your Mac. Python packages it
+installs itself, into `work/`; anything else a script needs (Homebrew, LaTeX), it shows you
+the command and runs it on your Mac once you approve it.
 
 The interface is a web page that is handed `window.yokan` (the messages, the memory, `send`) and
 nothing else. It loads nothing from the network and can't navigate.

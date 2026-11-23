@@ -52,6 +52,18 @@ package final class AppModel {
     package private(set) var rules = ""
     /// Whether the user let this app run commands.
     package private(set) var terminal = false
+    /// Whether the user is being asked to let the open app run commands, and the session of the
+    /// agent that asked, which goes on once they say yes.
+    package var allowing = false
+    /// A command the open app's agent asked to have run outside its sandbox, for the user to
+    /// read and say yes or no to.
+    package struct Proposal: Identifiable, Equatable {
+        package let session: String
+        package let command: Command
+        package var id: String { session }
+    }
+    package var proposed: Proposal?
+    private var waiting: String?
     package var notice: String?
     package var adding = false
     /// The sessions whose agent is answering, by id, whichever app they're in.
@@ -203,6 +215,9 @@ package final class AppModel {
         guard let app else { return }
         attempt { try home.allow(app, toRun: on) }
         refresh()
+        let asked = waiting
+        waiting = nil
+        if terminal, let asked { send(Agent.allowed, in: asked) }
     }
 
     package func rename(_ app: SkillApp, to name: String) {
@@ -288,6 +303,30 @@ package final class AppModel {
         send(text, in: id)
     }
 
+    /// The user's answer to a proposed command. Yes runs it, exactly as shown, and tells the
+    /// agent how it ended; no tells it to go on without.
+    package func answer(_ proposal: Proposal, run: Bool) {
+        proposed = nil
+        let id = proposal.session
+        guard let app, live[id] == nil else { return }
+        guard run else { return send(Command.refused, in: id) }
+        live[id] = Live(text: "", status: "Running " + proposal.command.text.prefix(60))
+        tasks[id] = Task { [weak self, home] in
+            let report: String
+            do {
+                let outcome = try await proposal.command.run(in: app.work, log: home.root.appending(path: "command.log"), askpass: home.root.appending(path: "askpass.sh"))
+                report = proposal.command.report(outcome)
+            } catch {
+                report = "That command couldn't be started: \(error.localizedDescription)"
+            }
+            guard let self else { return }
+            (self.live[id], self.tasks[id]) = (nil, nil)
+            // ponytail: the agent hears only if its app is still the open one. Keep what's owed
+            // on the disk if people leave during long installs.
+            if self.selected == app.id { self.send(report, in: id) } else { self.notice = "\(app.info.name)'s command ended. Open it and say so." }
+        }
+    }
+
     package func stop(_ session: String) {
         tasks[session]?.cancel()
     }
@@ -313,7 +352,7 @@ package final class AppModel {
             do {
                 for try await event in agent.events(for: turn) {
                     (reply, heard) = (reply.applying(event), true)
-                    self?.live[id] = Live(text: reply.text, status: reply.status)
+                    self?.live[id] = Live(text: Agent.asking(reply.text).text, status: reply.status)
                     if event == .touched, self?.selected == app.id { self?.refresh() }
                 }
             } catch {
@@ -327,8 +366,14 @@ package final class AppModel {
     private func finished(_ id: String, in app: SkillApp, reply: Reply, heard: Bool, failure: String?) {
         (live[id], tasks[id]) = (nil, nil)
         if let session = home.sessions(of: app).first(where: { $0.id == id }) {
-            let answered = reply.text.isEmpty ? session : session.adding(Session.Message(role: .assistant, text: reply.text))
+            let said = Agent.asking(reply.text)
+            let asked = Command.asked(in: said.text)
+            let answered = asked.text.isEmpty ? session : session.adding(Session.Message(role: .assistant, text: asked.text))
             attempt { try home.save(heard ? answered.begun() : answered, in: app) }
+            // It needs a command run: the user is asked, right where they are.
+            if said.asks, session.kind == .use, selected == app.id, !home.runs(app) { (waiting, allowing) = (id, true) }
+            // It needs one run outside the sandbox: the user reads it and decides.
+            if let command = asked.command, session.kind == .use, selected == app.id, home.runs(app) { proposed = Proposal(session: id, command: command) }
         }
         if let failure { notice = failure }
         if selected == app.id { refresh() }

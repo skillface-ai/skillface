@@ -60,6 +60,8 @@ struct SkillTests {
         try Repo.unpack(work.appending(path: "repo.tar.gz"), into: work.appending(path: "out"))
         #expect(try String(contentsOf: work.appending(path: "out/tutor/SKILL.md"), encoding: .utf8) == tutor)
         #expect(throws: YokanError.self) { try Repo.unpack(work.appending(path: "repo-main/tutor/SKILL.md"), into: work.appending(path: "bad")) }
+        // One that unpacks to more than it may is stopped.
+        #expect(throws: YokanError.self) { try Repo.unpack(work.appending(path: "repo.tar.gz"), into: work.appending(path: "bomb"), limit: 100) }
     }
 
     @Test func aNameIsAFolderName() {
@@ -181,7 +183,7 @@ struct HomeTests {
         #expect(renamed.info.named(String(repeating: "a", count: 200)).name.count == 60)
     }
 
-    @Test func aFolderOfSkillsBecomesOneAppThatOnlyReadsThem() throws {
+    @Test func aFolderOfSkillsBecomesOneAppThatOnlyReadsThem() async throws {
         let home = temporaryHome()
         let files = FileManager.default
         let repo = files.temporaryDirectory.appending(path: "yokan-tests-\(UUID().uuidString)/agent_skills")
@@ -221,17 +223,34 @@ struct HomeTests {
         // It runs commands only once the user says so, which is kept where no agent can write,
         // and then only its own agent, in the sandbox, with `source/` still nobody's to change.
         #expect(!arguments.contains("--settings") && !arguments[arguments.firstIndex(of: "--tools")! + 1].contains("Bash"))
-        #expect(told.contains("Use the Terminal"))
+        #expect(told.contains(Agent.asks))
+        #expect(Agent.asking("I need to render it.\n\n\(Agent.asks)") == ("I need to render it.", true) && !Agent.asking("Done.").asks && Agent.asking("Turn on Use the Terminal.").asks)
         #expect(!home.runs(app))
         try home.allow(app, toRun: true)
         #expect(home.runs(app) && !files.fileExists(atPath: app.folder.appending(path: "terminal.json").path))
         let runs = Agent.arguments(for: AgentTurn(app: app, session: Session(kind: .use), message: "Go", memory: [], skill: "", skills: home.skills(of: app), terminal: home.runs(app), rules: "", plugin: home.plugin))
-        #expect(runs[runs.firstIndex(of: "--tools")! + 1].hasSuffix(",Bash") && runs.contains(app.work.path))
+        #expect(runs[runs.firstIndex(of: "--tools")! + 1].hasSuffix(",Agent,Bash") && runs.contains(app.work.path))
         let settings = try #require(JSONSerialization.jsonObject(with: Data(runs[runs.firstIndex(of: "--settings")! + 1].utf8)) as? [String: [String: Any]])
         #expect(settings["sandbox"]?["enabled"] as? Bool == true && settings["sandbox"]?["allowUnsandboxedCommands"] as? Bool == false)
         #expect((settings["sandbox"]?["filesystem"] as? [String: [String]])?["denyWrite"] == [app.source.path])
+        #expect((settings["sandbox"]?["network"] as? [String: [String]])?["allowedDomains"] == ["pypi.org", "files.pythonhosted.org"])
         let building = Agent.arguments(for: AgentTurn(app: app, session: Session(kind: .build), message: "Go", memory: [], skill: "", terminal: true, rules: "", plugin: home.plugin))
         #expect(!building.contains("--settings") && !building[building.firstIndex(of: "--tools")! + 1].contains("Bash"))
+        // What the sandbox can't do it asks for, and that runs only as the user saw it.
+        let asked = Command.asked(in: "LaTeX is missing.\n\n[[run]]\necho made > out.txt; echo done; exit 3\n[[/run]]")
+        #expect(asked.text == "LaTeX is missing.\n\n```\necho made > out.txt; echo done; exit 3\n```")
+        #expect(Command.asked(in: "Nothing to run.").command == nil && Command.asked(in: "[[run]]\n\n[[/run]]").command == nil)
+        #expect(Command.asked(in: "[[run]]\necho hi\u{202E}; rm -rf ~\n[[/run]]").command == nil)
+        let outcome = try await #require(asked.command).run(in: app.work, log: home.root.appending(path: "command.log"), askpass: home.root.appending(path: "askpass.sh"))
+        #expect(outcome == Command.Outcome(status: 3, output: "done") && home.text(at: app.work.appending(path: "out.txt")) == "made\n")
+
+        // What one app was allowed isn't the next one's to take with its id.
+        let plan = try home.create(Skill(text: "---\nname: plan-b\ndescription: Plans.\n---\nPlan."))
+        try home.allow(plan, toRun: true)
+        try files.removeItem(at: plan.folder)
+        let next = try home.create(Skill(text: "---\nname: plan-b\ndescription: Plans.\n---\nPlan."))
+        #expect(next.id == plan.id && !home.runs(next) && home.runs(app))
+        try files.removeItem(at: next.folder)
         try home.allow(app, toRun: false)
         #expect(!home.runs(app))
 
@@ -275,7 +294,7 @@ struct AgentTests {
         let arguments = Agent.arguments(for: turn)
         #expect(turn.folder == turn.app.memory)
         #expect(arguments.contains("--restricted"))
-        #expect(arguments[arguments.firstIndex(of: "--tools")! + 1] == "Read,Write,Edit,Glob,Grep")
+        #expect(arguments[arguments.firstIndex(of: "--tools")! + 1] == "Read,Write,Edit,Glob,Grep,Agent")
         #expect(!arguments.contains("--plugin-dir"))
         #expect(arguments.suffix(2) == ["--", "Teach me Rust"])
         #expect(arguments.contains("--session-id") && !arguments.contains("--resume"))

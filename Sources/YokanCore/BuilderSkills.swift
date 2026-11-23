@@ -60,10 +60,12 @@ package enum BuilderSkills {
         4. **What passes between them.** A spec, a list of tasks, a draft, a verdict. That is what the app \
         keeps in memory, and it's what the interface shows: where the work is, and what each step made.
         5. **What a skill needs that an app can't do.** The app's agent can read the repository and write its \
-        memory. It runs commands only if the user lets it (Use the Terminal, in the app's ••• menu), and then \
-        in a sandbox: no network, and writing only in memory and in work/, where what a command makes \
-        belongs. Where a skill runs something, plan for the agent running it there, tell the user now to \
-        turn that on, and find what has to be installed first, which only the user can do. Where a skill \
+        memory. It runs commands only if the user lets it: Yokan asks them the first time the agent needs one, so \
+        APP.md never sends the user to a menu for it. Then it runs \
+        in a sandbox: no network but PyPI, so it installs Python packages itself, into work/, and writing \
+        only in memory and in work/, where what a command makes \
+        belongs. Where a skill runs something, plan for the agent running it there, tell the user now that \
+        they'll be asked, and find what has to be installed first that pip can't give: the agent asks for each such command, and Yokan runs it once the user approves it. Where a skill \
         needs the web, the agent does the thinking and tells the user what to fetch, or the step is left out.
 
         If the skills don't make a workflow, and it's a collection someone picks from, that is the answer: \

@@ -9,6 +9,7 @@ to come back to. README.md has the product and the flow. Its architecture follow
 
 - `Sources/YokanCore/`: no SwiftUI, so all of it runs under `swift test`.
   - `Skill.swift`: a SKILL.md, read and checked. `YokanError`.
+  - `Command.swift`: a command an agent asks the user to approve, and running it.
   - `Repo.swift`: a link to a GitHub repository of skills, fetched and unpacked.
   - `SkillApp.swift`: an app's folder, `Info` (`app.json`), `Stage`, `Design`, `Session`, `TextFile`,
     `SourceSkill`, `Choices`.
@@ -48,9 +49,11 @@ make run      # open the app
   from writing is that `YokanHome.create(from:named:)` leaves every file and folder read-only.
 - **An app runs commands only when its user said so, and only in the sandbox.** The say-so is in
   `terminal.json` beside the apps (`YokanHome.runs`), never in an app's folder, which an agent
-  writes. Then its own agent, never the builder, gets Bash under `Agent.sandbox(for:)`: no network,
+  writes. Then its own agent, never the builder, gets Bash under `Agent.sandbox(for:)`: no network but PyPI (`Agent.registries`),
   no way out of the sandbox, writing only `memory/` and `work/`. Don't allow Bash any other way
-  (`--allowedTools`, a permission mode): without the sandbox it must stay denied.
+  (`--allowedTools`, a permission mode): without the sandbox it must stay denied. What the sandbox
+  can't do (Homebrew, an installer) the agent asks for (`Command`), and Yokan runs it itself,
+  unsandboxed, only after the user read that exact command and said yes, each time.
 - A page loads
   nothing and goes nowhere (`Interface.policy`, `InterfaceView`'s delegate). Don't give the web
   view a base URL or a store that lasts.
