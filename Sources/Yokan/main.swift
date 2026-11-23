@@ -1,0 +1,3 @@
+import YokanUI
+
+YokanApp.main()

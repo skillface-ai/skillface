@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import YonkaCore
+import YokanCore
 
 /// An app being built, or changed: the conversation with the builder on the left, and on the
 /// right the interface as it stands, on its sample data, floating on the desk. While the user

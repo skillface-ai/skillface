@@ -1,9 +1,9 @@
 import Foundation
 import Observation
-import YonkaCore
+import YokanCore
 
 /// Every workflow, and every failure as a `notice`. The disk is the truth: each change is
-/// written through `YonkaHome`, then read back with `refresh`, which is also how the screens
+/// written through `YokanHome`, then read back with `refresh`, which is also how the screens
 /// catch up with what an agent wrote.
 @MainActor @Observable
 package final class AppModel {
@@ -16,7 +16,7 @@ package final class AppModel {
         package let status: String
     }
 
-    package let home: YonkaHome
+    package let home: YokanHome
     private let agent: AgentProcess
 
     package private(set) var apps: [SkillApp] = []
@@ -47,17 +47,26 @@ package final class AppModel {
     package private(set) var sketches: [String] = []
     package var sketched = 0
     package private(set) var skill = ""
+    /// The skills of an app made from a repository of them. Then `skill` is empty.
+    package private(set) var skills: [SourceSkill] = []
     package private(set) var rules = ""
+    /// Whether the user let this app run commands.
+    package private(set) var terminal = false
     package var notice: String?
     package var adding = false
     /// The sessions whose agent is answering, by id, whichever app they're in.
     package private(set) var live: [String: Live] = [:]
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
 
-    package init(home: YonkaHome = .standard(), agent: AgentProcess? = nil) {
+    package init(home given: YokanHome? = nil, agent: AgentProcess? = nil) {
+        // First, for the standard home: anything written would make the new folder, and the old
+        // one would never be moved to it.
+        let moved = given == nil ? Result { try YokanHome.adoptFormer() } : .success(())
+        let home = given ?? .standard()
         self.home = home
         self.agent = agent ?? AgentProcess(errors: home.errors)
         attempt { try BuilderSkills.write(to: home.plugin) }
+        if case .failure(let error) = moved { notice = error.localizedDescription }
         (apps, arrangement) = (home.apps(), home.arrangement())
     }
 
@@ -69,7 +78,7 @@ package final class AppModel {
         apps.map { ($0, home.lastUsed($0)) }.sorted { $0.1 > $1.1 }.map(\.0)
     }
     /// Every app, in the order the user put them, if they have.
-    package var arranged: [SkillApp] { YonkaHome.arranged(apps, by: arrangement) }
+    package var arranged: [SkillApp] { YokanHome.arranged(apps, by: arrangement) }
     package var hasArrangement: Bool { !arrangement.isEmpty }
     package var useSessions: [Session] { sessions.filter { $0.kind == .use } }
     package var session: Session? { useSessions.first { $0.id == sessionID } }
@@ -93,7 +102,13 @@ package final class AppModel {
 
     package var preview: Interface.State { Interface.preview(of: app?.info.name ?? "", demo: demo) }
 
-    package var skillFiles: [TextFile] { [TextFile(name: "SKILL.md", text: skill), TextFile(name: "APP.md", text: rules)] }
+    /// What the app is made from, and what the builder added. A repository's skills go by
+    /// where they are, and after the workflow that says how they're used.
+    package var skillFiles: [TextFile] {
+        let added = TextFile(name: "APP.md", text: rules)
+        guard !skills.isEmpty else { return [TextFile(name: "SKILL.md", text: skill), added] }
+        return [added] + skills.map { TextFile(name: "source/" + $0.path, text: $0.skill.text) }
+    }
 
     /// An interface's own script failed. Said in words the user can hand to the builder.
     package func interfaceFailed(_ error: String) {
@@ -108,16 +123,21 @@ package final class AppModel {
     package func refresh() {
         (apps, arrangement) = (home.apps(), home.arrangement())
         guard let app else {
-            (sessions, memory, interface, demo, skill, rules, designs, sketches) = ([], [], "", "", "", "", [], [])
+            (sessions, memory, interface, demo, skill, rules, designs, sketches, skills) = ([], [], "", "", "", "", [], [], [])
+            terminal = false
             if selected != nil { selected = nil }
             return
         }
+        terminal = home.runs(app)
         sessions = home.sessions(of: app)
         memory = home.memory(of: app)
         (interface, demo) = (home.text(at: app.interface), home.text(at: app.demo))
         designs = home.designs(of: app)
         sketches = home.sketches(of: app)
         (skill, rules) = (home.text(at: app.skill), home.text(at: app.rules))
+        // ponytail: walks `source/` each time, which nothing changes. Read it once per app if a
+        // big repository makes a build's screen slow.
+        skills = home.skills(of: app)
         // An app in use always has a session to type into.
         if app.info.stage == .done, session == nil {
             if let newest = useSessions.first { sessionID = newest.id } else { newSession() }
@@ -131,15 +151,32 @@ package final class AppModel {
 
     // MARK: Apps
 
-    /// A new app from what was pasted: a skill, or a link to one. Its build starts at once.
+    /// A new app from what was pasted: a skill, a link to one, or a link to a repository of
+    /// them. Its build starts at once.
     package func add(pasted: String) async -> Bool {
-        do {
+        await adding {
+            if let repo = Repo(pasted) {
+                let unpacked = FileManager.default.temporaryDirectory.appending(path: "yokan-repo-\(UUID().uuidString)")
+                defer { try? FileManager.default.removeItem(at: unpacked) }
+                return try home.create(from: try await repo.download(into: unpacked), named: repo.title)
+            }
             let link = Skill.source(pasted)
             let text = if let link { try await Skill.fetch(link) } else { pasted }
-            let app = try home.create(Skill(text: text))
+            return try home.create(Skill(text: text))
+        }
+    }
+
+    /// A new app from a folder of skills on this Mac.
+    package func add(folder: URL) async -> Bool {
+        await adding { try home.create(from: folder, named: Skill.title(folder.lastPathComponent)) }
+    }
+
+    private func adding(_ create: () async throws -> SkillApp) async -> Bool {
+        do {
+            let app = try await create()
             apps = home.apps()
             selected = app.id
-            if let build = app.info.buildSession { send(Agent.begin, in: build) }
+            if let build = app.info.buildSession { send(skills.isEmpty ? Agent.begin : Agent.beginAll, in: build) }
             return true
         } catch {
             notice = error.localizedDescription
@@ -157,7 +194,14 @@ package final class AppModel {
     /// One app takes another's place in `shown`, the order they're in on screen, which becomes
     /// the user's arrangement.
     package func move(_ id: String, to target: String, in shown: [SkillApp]) {
-        attempt { try home.arrange(YonkaHome.moving(id, to: target, in: shown.map(\.id))) }
+        attempt { try home.arrange(YokanHome.moving(id, to: target, in: shown.map(\.id))) }
+        refresh()
+    }
+
+    /// Lets the open app run commands, or stops it. It holds from the next message.
+    package func allowTerminal(_ on: Bool) {
+        guard let app else { return }
+        attempt { try home.allow(app, toRun: on) }
         refresh()
     }
 
@@ -202,7 +246,9 @@ package final class AppModel {
             switch (files, name) {
             case (.memory, _): try home.remember(text, as: name, in: app)
             case (_, "SKILL.md"): try Data(text.utf8).write(to: app.skill, options: .atomic)
-            default: try Data(text.utf8).write(to: app.rules, options: .atomic)
+            case (_, "APP.md"): try Data(text.utf8).write(to: app.rules, options: .atomic)
+            // A repository's skills stay as they came.
+            default: break
             }
         }
         refresh()
@@ -259,7 +305,7 @@ package final class AppModel {
             sketched = 0
         }
         // The turn carries the session as Claude Code has it: `started` says whether to resume.
-        let turn = AgentTurn(app: app, session: asked, message: text, memory: memory, skill: skill, rules: rules, plugin: home.plugin)
+        let turn = AgentTurn(app: app, session: asked, message: text, memory: memory, skill: skill, skills: skills, terminal: terminal, rules: rules, plugin: home.plugin)
         live[id] = Live(text: "", status: "")
         refresh()
         tasks[id] = Task { [weak self, agent] in

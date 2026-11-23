@@ -1,18 +1,18 @@
 import Foundation
 import Testing
 
-@testable import YonkaCore
+@testable import YokanCore
 
 /// The whole flow with the real Claude Code, on the user's plan, so only when asked for:
-/// `YONKA_LIVE=<folder> YONKA_SKILL=<SKILL.md> swift test --filter Live`. It builds the skill
+/// `YOKAN_LIVE=<folder> YOKAN_SKILL=<SKILL.md> swift test --filter Live`. It builds the skill
 /// into an app in that folder, answering each question with its first choice and picking the
 /// second of the versions drawn, then uses it in
 /// two sessions, and prints what was said. What it proves is that the second session starts
 /// from what the first one learned.
 struct LiveTests {
-    private static let folder = ProcessInfo.processInfo.environment["YONKA_LIVE"]
+    private static let folder = ProcessInfo.processInfo.environment["YOKAN_LIVE"]
 
-    private func say(_ message: String, in id: String, of app: SkillApp, home: YonkaHome, agent: AgentProcess) async throws -> String {
+    private func say(_ message: String, in id: String, of app: SkillApp, home: YokanHome, agent: AgentProcess) async throws -> String {
         let app = try #require(home.apps().first { $0.id == app.id })
         let session = try #require(home.sessions(of: app).first { $0.id == id })
         let turn = AgentTurn(
@@ -28,12 +28,25 @@ struct LiveTests {
         return reply.text
     }
 
+    /// A real repository, fetched and made into an app's folder: `YOKAN_REPO=<link> swift test
+    /// --filter Live`. It asks GitHub, and nothing of Claude Code.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["YOKAN_REPO"] != nil))
+    func aRepositoryOnGitHubBecomesAnAppsSource() async throws {
+        let repo = try #require(Repo(ProcessInfo.processInfo.environment["YOKAN_REPO"] ?? ""))
+        let work = FileManager.default.temporaryDirectory.appending(path: "yokan-live-\(UUID().uuidString)")
+        let home = YokanHome(root: work.appending(path: "home"))
+        let app = try home.create(from: try await repo.download(into: work.appending(path: "repo")), named: repo.title)
+        let skills = home.skills(of: app)
+        print("\n\(app.info.name): \(skills.count) skills in \(app.source.path)\n\(skills.map { "  \($0.path): \($0.skill.name)" }.joined(separator: "\n"))")
+        #expect(!skills.isEmpty)
+    }
+
     @Test(.enabled(if: folder != nil), .timeLimit(.minutes(30)))
     func aSkillBecomesAnAppThatRemembers() async throws {
-        let home = YonkaHome(root: URL(fileURLWithPath: try #require(Self.folder)))
+        let home = YokanHome(root: URL(fileURLWithPath: try #require(Self.folder)))
         let agent = AgentProcess(errors: home.errors)
         try BuilderSkills.write(to: home.plugin)
-        let skill = try String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["YONKA_SKILL"]), encoding: .utf8)
+        let skill = try String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["YOKAN_SKILL"]), encoding: .utf8)
         let app = try home.create(Skill(text: skill))
         let build = try #require(app.info.buildSession)
         func stage() -> SkillApp.Stage? { home.apps().first { $0.id == app.id }?.info.stage }

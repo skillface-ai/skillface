@@ -1,5 +1,5 @@
 import SwiftUI
-import YonkaCore
+import YokanCore
 
 /// The window: home, or the app that's open.
 package struct RootView: View {

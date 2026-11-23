@@ -4,18 +4,18 @@ check: ## build and test: the definition of done
 	swift build
 	swift test
 
-run: ## open Yonka
-	swift run yonka
+run: ## open Yokan
+	swift run yokan
 
 shots: ## draw every screen offscreen into .build/shots/*.png, on sample data
 	swift run shots .build/shots
 
-APP = .build/app/Yonka.app
+APP = .build/app/Yokan.app
 
-app: ## the release build as .build/app/Yonka.app, signed ad-hoc
-	swift build -c release --product yonka
+app: ## the release build as .build/app/Yokan.app, signed ad-hoc
+	swift build -c release --product yokan
 	rm -rf $(APP) && mkdir -p $(APP)/Contents/MacOS
-	cp .build/release/yonka $(APP)/Contents/MacOS/
+	cp .build/release/yokan $(APP)/Contents/MacOS/
 	cp App/Info.plist $(APP)/Contents/
 	codesign --force --sign - $(APP)
 	@echo "built $(CURDIR)/$(APP)"

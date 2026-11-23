@@ -1,8 +1,8 @@
 import SwiftUI
 import WebKit
-import YonkaCore
+import YokanCore
 
-/// An app's `interface.html`, running. It's given `yonka` and its state, and gets back only
+/// An app's `interface.html`, running. It's given `yokan` and its state, and gets back only
 /// what it sends as the user: it keeps nothing, loads nothing (`Interface.policy`) and is never
 /// let go anywhere, since it's written from a skill off the internet and it sees the user's memory.
 ///
@@ -22,14 +22,14 @@ struct InterfaceView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         // The state it opens with is there before its first script runs, so it never draws empty first.
-        let start = WKUserScript(source: "\(Interface.bridge)\n__yonka(\(state.json));", injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        let start = WKUserScript(source: "\(Interface.bridge)\n__yokan(\(state.json));", injectionTime: .atDocumentStart, forMainFrameOnly: true)
         configuration.userContentController.addUserScript(start)
-        configuration.userContentController.add(context.coordinator, name: "yonka")
+        configuration.userContentController.add(context.coordinator, name: "yokan")
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         // The page's own `--bg` is what shows, with no white flash before it.
         view.setValue(false, forKey: "drawsBackground")
-        // Yonka is always dark, and so is an app in it, whatever the Mac is set to.
+        // Yokan is always dark, and so is an app in it, whatever the Mac is set to.
         view.appearance = NSAppearance(named: .darkAqua)
         context.coordinator.shown = state
         (context.coordinator.send, context.coordinator.failed) = (send, failed)
@@ -41,7 +41,7 @@ struct InterfaceView: NSViewRepresentable {
         (context.coordinator.send, context.coordinator.failed) = (send, failed)
         guard context.coordinator.shown != state else { return }
         context.coordinator.shown = state
-        view.evaluateJavaScript("__yonka(\(state.json))")
+        view.evaluateJavaScript("__yokan(\(state.json))")
     }
 
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {

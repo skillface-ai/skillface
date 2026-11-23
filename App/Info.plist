@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key>
-	<string>yonka</string>
+	<string>yokan</string>
 	<key>CFBundleIdentifier</key>
-	<string>ai.yongkang.yonka</string>
+	<string>ai.yongkang.yokan</string>
 	<key>CFBundleName</key>
-	<string>Yonka</string>
+	<string>Yokan</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>

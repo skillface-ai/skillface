@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import YonkaCore
+import YokanCore
 
 /// One app, open: being built, or in use, where its sessions run along the top as one
 /// lifeline and what it remembers opens beside it.
@@ -8,6 +8,7 @@ struct AppScreen: View {
     @Bindable var model: AppModel
     let app: SkillApp
     @State private var deleting: SkillApp?
+    @State private var allowing = false
 
     private var building: Bool { app.info.stage != .done }
 
@@ -35,8 +36,10 @@ struct AppScreen: View {
                         .help("Change how \(app.info.name) looks and works")
                 }
                 Menu {
-                    Button("Skill…") { model.showingSkill = true }
+                    Button(model.skills.isEmpty ? "Skill…" : "Skills…") { model.showingSkill = true }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([app.folder]) }
+                    // Turning it on is asked about: turning it off never is.
+                    Toggle("Use the Terminal", isOn: Binding(get: { model.terminal }, set: { if $0 { allowing = true } else { model.allowTerminal(false) } }))
                     Divider()
                     Button("Delete…", role: .destructive) { deleting = app }
                 } label: {
@@ -63,10 +66,16 @@ struct AppScreen: View {
             }
         }
         .confirmsDeleting($deleting, in: model)
+        .confirmationDialog("Let \(app.info.name) run commands on this Mac?", isPresented: $allowing) {
+            Button("Let It") { model.allowTerminal(true) }
+        } message: {
+            Text("It runs what its skill says to, without asking each time, in a sandbox: no network, and it can write only in its own memory and work folder. It can read most other files on this Mac.")
+        }
         .sheet(isPresented: $model.showingSkill) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("The skill").font(Theme.serif(24))
-                FilesEditor(files: model.skillFiles, save: { model.save($1, as: $0, in: .skill) })
+                Text(model.skills.isEmpty ? "The skill" : "The skills").font(Theme.serif(24))
+                // A repository's skills stay as they came: to read, not to change.
+                FilesEditor(files: model.skillFiles, save: { model.save($1, as: $0, in: .skill) }, fixed: { $0.hasPrefix("source/") })
                 Button("Done") { model.showingSkill = false }.keyboardShortcut(.defaultAction).frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(24).frame(width: 720, height: 600)
@@ -175,6 +184,8 @@ struct FilesEditor: View {
     let files: [TextFile]
     let save: (String, String) -> Void
     var delete: ((String) -> Void)?
+    /// The files that are only to read.
+    var fixed: (String) -> Bool = { _ in false }
 
     @State private var selected: String?
     @State private var draft = ""
@@ -199,18 +210,23 @@ struct FilesEditor: View {
                     }
                 }
             }
-            TextEditor(text: $draft)
-                .font(.system(size: 12.5, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .background(Theme.ink, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Group {
+                if let selected, fixed(selected) {
+                    ScrollView { Text(draft).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(5) }
+                } else {
+                    TextEditor(text: $draft).scrollContentBackground(.hidden)
+                }
+            }
+            .font(.system(size: 12.5, design: .monospaced))
+            .padding(10)
+            .background(Theme.ink, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .onAppear(perform: show)
         // The agent may have written it since.
         .onChange(of: files) { show() }
         .onChange(of: selected) { show() }
         .onChange(of: draft) {
-            if let selected, let text, draft != text { save(selected, draft) }
+            if let selected, !fixed(selected), let text, draft != text { save(selected, draft) }
         }
     }
 

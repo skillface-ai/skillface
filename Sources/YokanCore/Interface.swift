@@ -7,7 +7,7 @@ import Foundation
 /// What a page can call is a contract: change `bridge` or `css` and `BuilderSkills.interface`,
 /// which is what the builder reads, changes with it.
 package enum Interface {
-    /// What a page shows: the state `yonka` hands it.
+    /// What a page shows: the state `yokan` hands it.
     package struct State: Equatable, Sendable {
         package let app: String
         package let session: String
@@ -25,7 +25,7 @@ package enum Interface {
             (self.busy, self.status, self.preview) = (busy, status, preview)
         }
 
-        /// As the argument `__yonka` takes.
+        /// As the argument `__yokan` takes.
         package var json: String {
             let object: [String: Any] = [
                 "app": ["name": app], "session": ["title": session],
@@ -65,7 +65,7 @@ package enum Interface {
     /// posted or framed.
     static let policy = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"
 
-    /// Yonka's own look, which every app starts from, so an app belongs in the room it's in:
+    /// Yokan's own look, which every app starts from, so an app belongs in the room it's in:
     /// always dark, a serif for what's said large, a monospace for small labels, one accent.
     /// `Theme` has the same colours for the app around the page.
     static let css = """
@@ -85,14 +85,14 @@ package enum Interface {
         ::placeholder { color: var(--tertiary) }
         """
 
-    /// `window.yonka`, run before the page's own scripts. `__yonka(state)` is how the app hands
-    /// it a new state; `yonka.send` is the page's one way back.
+    /// `window.yokan`, run before the page's own scripts. `__yokan(state)` is how the app hands
+    /// it a new state; `yokan.send` is the page's one way back.
     package static let bridge = #"""
         (() => {
           const state = { app: { name: "" }, session: { title: "" }, messages: [], memory: {}, busy: false, status: "", preview: false };
           const listeners = [];
-          const report = (error) => window.webkit.messageHandlers.yonka.postMessage({ error: String(error) });
-          const fire = () => listeners.forEach((fn) => { try { fn(window.yonka) } catch (error) { report(error) } });
+          const report = (error) => window.webkit.messageHandlers.yokan.postMessage({ error: String(error) });
+          const fire = () => listeners.forEach((fn) => { try { fn(window.yokan) } catch (error) { report(error) } });
           const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
           const inline = (text) => escape(text)
             .replace(/`([^`]+)`/g, "<code>$1</code>")
@@ -129,7 +129,7 @@ package enum Interface {
             close();
             return out.join("");
           };
-          window.yonka = {
+          window.yokan = {
             get app() { return state.app }, get session() { return state.session },
             get messages() { return state.messages }, get memory() { return state.memory },
             get busy() { return state.busy }, get status() { return state.status }, get preview() { return state.preview },
@@ -139,12 +139,15 @@ package enum Interface {
               if (!text || state.busy) return;
               // A preview has no agent: what's sent is shown, so the design can be tried.
               if (state.preview) { state.messages = [...state.messages, { role: "user", text }]; fire() }
-              else window.webkit.messageHandlers.yonka.postMessage(text);
+              else window.webkit.messageHandlers.yokan.postMessage(text);
             },
-            onChange(fn) { listeners.push(fn); try { fn(window.yonka) } catch (error) { report(error) } },
+            onChange(fn) { listeners.push(fn); try { fn(window.yokan) } catch (error) { report(error) } },
             html, escape,
           };
-          window.__yonka = (next) => { Object.assign(state, next); fire() };
+          // Yokan was called Yonka, and the pages built then call `yonka`: the same object, so
+          // they go on working.
+          window.yonka = window.yokan;
+          window.__yokan = (next) => { Object.assign(state, next); fire() };
           // A page that breaks says so, rather than sitting there blank.
           window.addEventListener("error", (event) => report(event.message));
         })();
@@ -188,11 +191,11 @@ package enum Interface {
           const status = document.getElementById("status"), box = document.getElementById("box");
           let drawn = 0;
 
-          yonka.onChange(() => {
-            const messages = yonka.messages;
+          yokan.onChange(() => {
+            const messages = yokan.messages;
             log.classList.toggle("empty", !messages.length);
             if (!messages.length) {
-              log.innerHTML = `<h1>${yonka.escape(yonka.app.name)}</h1><div>Say something to begin.</div>`;
+              log.innerHTML = `<h1>${yokan.escape(yokan.app.name)}</h1><div>Say something to begin.</div>`;
               drawn = 0;
             } else {
               // Only the last message changes while an answer streams: the rest stay as drawn.
@@ -202,21 +205,21 @@ package enum Interface {
               messages.slice(kept).forEach((message, index) => {
                 const row = document.createElement("div");
                 row.className = "message " + message.role + (kept + index >= drawn ? " new" : "");
-                row.innerHTML = "<div>" + (message.role === "user" ? yonka.escape(message.text) : yonka.html(message.text)) + "</div>";
+                row.innerHTML = "<div>" + (message.role === "user" ? yokan.escape(message.text) : yokan.html(message.text)) + "</div>";
                 log.append(row);
               });
               drawn = messages.length;
               main.scrollTop = main.scrollHeight;
             }
-            status.textContent = yonka.busy ? (yonka.status || "Thinking") : "";
-            status.classList.toggle("busy", yonka.busy);
+            status.textContent = yokan.busy ? (yokan.status || "Thinking") : "";
+            status.classList.toggle("busy", yokan.busy);
           });
 
           box.addEventListener("input", () => { box.style.height = "auto"; box.style.height = box.scrollHeight + 2 + "px" });
           box.addEventListener("keydown", (event) => {
-            if (event.key !== "Enter" || event.shiftKey || event.isComposing || yonka.busy || !box.value.trim()) return;
+            if (event.key !== "Enter" || event.shiftKey || event.isComposing || yokan.busy || !box.value.trim()) return;
             event.preventDefault();
-            yonka.send(box.value);
+            yokan.send(box.value);
             box.value = "";
             box.style.height = "auto";
           });

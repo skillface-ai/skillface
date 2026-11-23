@@ -1,9 +1,10 @@
 import Foundation
 
-/// An app made from a skill: a folder. Everything about it is a file there, so the builder
-/// changes it by editing files, and nothing is kept anywhere else.
+/// An app made from a skill, or from a repository of them: a folder. Everything about it is a
+/// file there, so the builder changes it by editing files, and nothing is kept anywhere else.
 ///
-///     SKILL.md         the skill, as it was added
+///     SKILL.md         the skill, as it was added, in an app made from one
+///     source/          the repository, as it came, in an app made from several: read, never written
 ///     APP.md           what the builder adds for the agent running it: which memory to keep, and how
 ///     app.json         its name, symbol, and how far the build is
 ///     interface.html   what the user sees
@@ -11,6 +12,7 @@ import Foundation
 ///     designs/         the versions the builder drew to choose from: `A.html`…, and `index.json`
 ///     sketches/        a rough picture of each answer to the question being asked: `1.html`…
 ///     memory/          what outlives every session; the running agent's one folder
+///     work/            where its commands run and what they make, if the user lets it run any
 ///     sessions/        every conversation, one JSON file each
 package struct SkillApp: Identifiable, Equatable, Sendable {
     /// Its folder's name.
@@ -19,12 +21,14 @@ package struct SkillApp: Identifiable, Equatable, Sendable {
     package let info: Info
 
     package var skill: URL { folder.appending(path: "SKILL.md") }
+    package var source: URL { folder.appending(path: "source") }
     package var rules: URL { folder.appending(path: "APP.md") }
     package var interface: URL { folder.appending(path: "interface.html") }
     package var demo: URL { folder.appending(path: "demo.json") }
     package var designs: URL { folder.appending(path: "designs") }
     package var sketches: URL { folder.appending(path: "sketches") }
     package var memory: URL { folder.appending(path: "memory") }
+    package var work: URL { folder.appending(path: "work") }
     package var sessions: URL { folder.appending(path: "sessions") }
 
     package func with(_ info: Info) -> SkillApp { SkillApp(id: id, folder: folder, info: info) }
@@ -85,6 +89,16 @@ package struct Design: Identifiable, Equatable, Sendable {
     }
 }
 
+/// One of the skills of an app made from several: where it is in `source/`, and what it says.
+package struct SourceSkill: Identifiable, Equatable, Sendable {
+    /// Its SKILL.md's path in `source/`: "skills/review/SKILL.md".
+    package let path: String
+    package let skill: Skill
+    package var id: String { path }
+
+    package init(path: String, skill: Skill) { (self.path, self.skill) = (path, skill) }
+}
+
 /// A file as the app shows it: a memory, the skill, the rules.
 package struct TextFile: Identifiable, Equatable, Sendable {
     /// Its path in its folder.
@@ -96,7 +110,7 @@ package struct TextFile: Identifiable, Equatable, Sendable {
 }
 
 /// One conversation with an app, or with the builder about it. Claude Code keeps its own record
-/// under the same id, which is how the next message continues it; this is what Yonka shows.
+/// under the same id, which is how the next message continues it; this is what Yokan shows.
 package struct Session: Codable, Identifiable, Equatable, Sendable {
     package enum Kind: String, Codable, Sendable { case build, use }
     package enum Role: String, Codable, Sendable { case user, assistant }

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import YonkaCore
+import YokanCore
 
 /// Home: the one thing to do, and the apps already made. Dropping a skill anywhere makes an
 /// app; the dock opens one, and All Apps is the dock, risen.
@@ -14,7 +14,7 @@ struct HomeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
-                Text("Yonka").font(Theme.serif(20))
+                Text("Yokan").font(Theme.serif(20))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, Theme.lights + 8).padding(.top, 5)
                 Spacer()
@@ -25,7 +25,7 @@ struct HomeView: View {
                         .font(.system(size: 17)).foregroundStyle(Theme.soft)
                     VStack(spacing: 8) {
                         // Vertical, so a pasted skill keeps its lines: its frontmatter needs them.
-                        TextField("or paste a skill, or a link to one", text: $pasted, axis: .vertical)
+                        TextField("or paste a skill, or a link to one, or to a repository of them", text: $pasted, axis: .vertical)
                             .textFieldStyle(.plain).lineLimit(1...3).multilineTextAlignment(.center)
                             .font(.system(size: 15)).onSubmit { make(pasted) }
                         Rectangle().fill(targeted ? Theme.accent : Theme.rule).frame(height: 1.5)
@@ -50,21 +50,31 @@ struct HomeView: View {
         }
         .animation(.spring(duration: 0.4, bounce: 0.12), value: model.showingAll)
         .disabled(working)
-        // The whole window takes a skill: its file, or the folder it's in.
+        // The whole window takes a skill: its file, or the folder it's in. A folder that isn't
+        // one skill is a folder of them.
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
-            let file = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true ? url.appending(path: "SKILL.md") : url
-            make((try? String(contentsOf: file, encoding: .utf8)) ?? "")
+            let folder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            let file = folder ? url.appending(path: "SKILL.md") : url
+            if folder, !FileManager.default.fileExists(atPath: file.path) {
+                run { await model.add(folder: url) }
+            } else {
+                make((try? String(contentsOf: file, encoding: .utf8)) ?? "")
+            }
             return true
         } isTargeted: { targeted = $0 }
     }
 
-    /// Stays home if it couldn't, with why said at the bottom of the window.
     private func make(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        run { await model.add(pasted: text) }
+    }
+
+    /// Stays home if it couldn't, with why said at the bottom of the window.
+    private func run(_ add: @escaping () async -> Bool) {
         working = true
         Task {
-            if await model.add(pasted: text) { pasted = "" }
+            if await add() { pasted = "" }
             working = false
         }
     }

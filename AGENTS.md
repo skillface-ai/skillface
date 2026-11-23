@@ -1,4 +1,4 @@
-# Yonka
+# Yokan
 
 A macOS app that turns a skill into an app: its own interface, a memory that lasts, and sessions
 to come back to. README.md has the product and the flow. Its architecture follows Yongkang's.
@@ -7,22 +7,24 @@ to come back to. README.md has the product and the flow. Its architecture follow
 
 ## Layout
 
-- `Sources/YonkaCore/`: no SwiftUI, so all of it runs under `swift test`.
-  - `Skill.swift`: a SKILL.md, read and checked. `YonkaError`.
-  - `SkillApp.swift`: an app's folder, `Info` (`app.json`), `Stage`, `Design`, `Session`, `TextFile`, `Choices`.
-  - `YonkaHome.swift`: where everything lives. Every read and write of an app's folder.
+- `Sources/YokanCore/`: no SwiftUI, so all of it runs under `swift test`.
+  - `Skill.swift`: a SKILL.md, read and checked. `YokanError`.
+  - `Repo.swift`: a link to a GitHub repository of skills, fetched and unpacked.
+  - `SkillApp.swift`: an app's folder, `Info` (`app.json`), `Stage`, `Design`, `Session`, `TextFile`,
+    `SourceSkill`, `Choices`.
+  - `YokanHome.swift`: where everything lives. Every read and write of an app's folder.
   - `Agent.swift`: `AgentTurn`, Claude Code's flags and what it's told (`Agent`), its stream
     (`AgentStream`, `AgentEvent`, `Reply`), and running it (`AgentProcess`).
-  - `BuilderSkills.swift`: the builder's five skills, written out as a Claude Code plugin.
-  - `Interface.swift`: what an `interface.html` is given: `bridge` (`window.yonka`), `css`,
+  - `BuilderSkills.swift`: the builder's six skills, written out as a Claude Code plugin.
+  - `Interface.swift`: what an `interface.html` is given: `bridge` (`window.yokan`), `css`,
     `policy`, the starter page, and the `State` it's handed.
-- `Sources/YonkaUI/`: `AppModel` (every workflow; failures become `notice`) and the screens:
+- `Sources/YokanUI/`: `AppModel` (every workflow; failures become `notice`) and the screens:
   `HomeView` (the drop target, the dock, All Apps), `AppScreen` (an open app: the lifeline, what
-  it knows), `BuilderView` (the conversation, the versions). `Theme` is Yonka's own look, always
+  it knows), `BuilderView` (the conversation, the versions). `Theme` is Yokan's own look, always
   dark; `InterfaceView` is the one web view, and an app's page follows the Mac's appearance.
-- `Sources/Yonka/main.swift`: the app.
+- `Sources/Yokan/main.swift`: the app.
 - `Sources/Shots/`: dev-only, draws every screen offscreen on sample data.
-- `Tests/YonkaCoreTests/`: on a throwaway home and a stand-in for Claude Code. `LiveTests` is the
+- `Tests/YokanCoreTests/`: on a throwaway home and a stand-in for Claude Code. `LiveTests` is the
   whole flow on the real one, only when asked for.
 
 ## Commands
@@ -38,13 +40,22 @@ make run      # open the app
 - **The interface API is a contract.** A change to `Interface.bridge`, `Interface.css` or
   `Interface.State` updates `BuilderSkills.interface` (what the builder reads), the starter page
   and the tests in the same change.
-- **The disk is the truth.** `AppModel` writes through `YonkaHome` and reads back with `refresh`,
+- **The disk is the truth.** `AppModel` writes through `YokanHome` and reads back with `refresh`,
   which is also how it sees what an agent wrote. Don't keep a second copy of an app's state.
-- **An app's agent writes only `memory/`**, and the builder never writes there. A page loads
+- **An app's agent writes only `memory/`** (and `work/`, once it runs commands), and the builder
+  writes in neither. Nobody writes
+  `source/`, a repository as it came: its agent may read there (`--add-dir`), and what keeps it
+  from writing is that `YokanHome.create(from:named:)` leaves every file and folder read-only.
+- **An app runs commands only when its user said so, and only in the sandbox.** The say-so is in
+  `terminal.json` beside the apps (`YokanHome.runs`), never in an app's folder, which an agent
+  writes. Then its own agent, never the builder, gets Bash under `Agent.sandbox(for:)`: no network,
+  no way out of the sandbox, writing only `memory/` and `work/`. Don't allow Bash any other way
+  (`--allowedTools`, a permission mode): without the sandbox it must stay denied.
+- A page loads
   nothing and goes nowhere (`Interface.policy`, `InterfaceView`'s delegate). Don't give the web
   view a base URL or a store that lasts.
 - **Everything from a skill or an agent is untrusted:** a skill's name becomes a folder only
-  through `Skill.slug`, a memory's name a path only through `YonkaHome.memoryFile`, a session's
+  through `Skill.slug`, a repository only its plain files (nothing hidden, no links), a memory's name a path only through `YokanHome.memoryFile`, a session's
   id only as a UUID, and `app.json` decodes whatever is in it.
 - **Values don't change.** Core's types are immutable: a change is a new value (`Session.adding`,
   `Info.at`, `Reply.applying`).

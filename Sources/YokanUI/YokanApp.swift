@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-package struct YonkaApp: App {
+package struct YokanApp: App {
     @State private var model = AppModel()
 
     package init() {
@@ -10,7 +10,7 @@ package struct YonkaApp: App {
     }
 
     package var body: some Scene {
-        Window("Yonka", id: "main") {
+        Window("Yokan", id: "main") {
             RootView(model: model)
                 .frame(minWidth: 980, minHeight: 640)
                 // Under the title bar, which is hidden: the window is all content.
