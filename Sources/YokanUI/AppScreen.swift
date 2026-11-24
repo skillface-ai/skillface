@@ -73,7 +73,7 @@ struct AppScreen: View {
         .sheet(item: $model.proposed) { proposal in
             VStack(alignment: .leading, spacing: 14) {
                 Text("Run this on your Mac?").font(Theme.serif(24))
-                Text("\(app.info.name) asks for it. It runs outside the sandbox, as you, with nothing held back: read it first.").foregroundStyle(Theme.dim)
+                Text("\(app.info.name) asks for it. It runs outside the sandbox, as you, with nothing held back. Any file it names in the app's folder was written by the app. Read it first.").foregroundStyle(Theme.dim)
                 ScrollView { Text(proposal.command.text).font(.system(size: 13, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(12) }
                     .background(Theme.ink, in: RoundedRectangle(cornerRadius: 8))
                 HStack {

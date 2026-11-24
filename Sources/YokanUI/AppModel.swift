@@ -314,7 +314,7 @@ package final class AppModel {
         tasks[id] = Task { [weak self, home] in
             let report: String
             do {
-                let outcome = try await proposal.command.run(in: app.work, log: home.root.appending(path: "command.log"), askpass: home.root.appending(path: "askpass.sh"))
+                let outcome = try await proposal.command.run(log: home.root.appending(path: "command.log"), askpass: home.root.appending(path: "askpass.sh"))
                 report = proposal.command.report(outcome)
             } catch {
                 report = "That command couldn't be started: \(error.localizedDescription)"

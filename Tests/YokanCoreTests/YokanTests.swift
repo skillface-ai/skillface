@@ -241,8 +241,10 @@ struct HomeTests {
         #expect(asked.text == "LaTeX is missing.\n\n```\necho made > out.txt; echo done; exit 3\n```")
         #expect(Command.asked(in: "Nothing to run.").command == nil && Command.asked(in: "[[run]]\n\n[[/run]]").command == nil)
         #expect(Command.asked(in: "[[run]]\necho hi\u{202E}; rm -rf ~\n[[/run]]").command == nil)
-        let outcome = try await #require(asked.command).run(in: app.work, log: home.root.appending(path: "command.log"), askpass: home.root.appending(path: "askpass.sh"))
-        #expect(outcome == Command.Outcome(status: 3, output: "done") && home.text(at: app.work.appending(path: "out.txt")) == "made\n")
+        let outcome = try await #require(asked.command).run(log: home.root.appending(path: "command.log"), askpass: home.root.appending(path: "askpass.sh"))
+        // It runs where the agent can't have left anything, not in the app's folder.
+        #expect(outcome == Command.Outcome(status: 3, output: "done") && !files.fileExists(atPath: app.work.appending(path: "out.txt").path))
+        #expect(Command.asked(in: "[[run]]\necho hi\n\n\n\nrm -rf ~\n[[/run]]").command == nil)
 
         // What one app was allowed isn't the next one's to take with its id.
         let plan = try home.create(Skill(text: "---\nname: plan-b\ndescription: Plans.\n---\nPlan."))

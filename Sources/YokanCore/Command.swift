@@ -9,8 +9,11 @@ package struct Command: Equatable, Sendable {
     /// How an agent asks: the command between these two lines, at the end of a message.
     package static let open = "[[run]]"
     package static let close = "[[/run]]"
-    /// Longer than this is nothing a person reads before saying yes.
-    static let limit = 2_000
+    /// One line, no longer than this, so the whole of it is in front of the user when they say
+    /// yes: nothing below a run of blank lines, nothing to scroll to.
+    static let limit = 500
+    /// How much of what it printed the agent is told.
+    static let tail = 2_000
 
     /// What a reply asks to have run, if anything, and the reply as the user reads it: the
     /// command in a code block where the marks were.
@@ -20,9 +23,9 @@ package struct Command: Equatable, Sendable {
         }
         let text = reply[start.upperBound..<end.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
         let shown = reply.replacingCharacters(in: start.lowerBound..<end.upperBound, with: "```\n\(text)\n```")
-        // Only what a person can read as it is: plain ASCII. A character that doesn't show, or
-        // that reorders the line, would make the sheet say one thing and the shell run another.
-        let plain = text.unicodeScalars.allSatisfy { (0x20..<0x7F).contains($0.value) || $0 == "\n" }
+        // Only what a person can read as it is: one line of plain ASCII. A character that doesn't
+        // show, or that reorders the line, would make the sheet say one thing and the shell run another.
+        let plain = text.unicodeScalars.allSatisfy { (0x20..<0x7F).contains($0.value) }
         return (shown, text.isEmpty || text.count > limit || !plain ? nil : Command(text: text))
     }
 
@@ -40,14 +43,18 @@ package struct Command: Equatable, Sendable {
 
         """
 
-    /// Runs it in `folder`, in the user's login shell so their PATH finds what their terminal
-    /// does. Ends when it does; stops it if whoever is waiting stops.
+    /// Runs it in the user's login shell, so their PATH finds what their terminal does, and in a
+    /// new empty folder: never in one the agent can write, where a file it left (a script, a
+    /// config a tool reads on its own) would change what the approved line does unseen. A file the
+    /// command needs has to be named in it, by its full path, where the user reads it. Ends when it does; stops it if whoever is waiting stops.
     ///
     /// ponytail: no time limit, since an install can take an hour: the user stops it. It can
     /// answer a password and nothing else, so a command that asks a question waits until stopped.
-    package func run(in folder: URL, log: URL, askpass: URL) async throws -> Outcome {
+    package func run(log: URL, askpass: URL) async throws -> Outcome {
         let files = FileManager.default
+        let folder = files.temporaryDirectory.appending(path: "yokan-run-" + UUID().uuidString)
         try files.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? files.removeItem(at: folder) }
         try Data(Self.askpass.utf8).write(to: askpass)
         try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: askpass.path)
         // A file, not a pipe: nobody reads it until the end, and a full pipe would stop the command.
@@ -64,7 +71,7 @@ package struct Command: Equatable, Sendable {
         try process.run()
         await withTaskCancellationHandler { for await _ in exited {} } onCancel: { process.terminate() }
         let said = String(decoding: (try? Data(contentsOf: log)) ?? Data(), as: UTF8.self)
-        return Outcome(status: process.terminationStatus, output: String(said.suffix(Self.limit)).trimmingCharacters(in: .whitespacesAndNewlines))
+        return Outcome(status: process.terminationStatus, output: String(said.suffix(Self.tail)).trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// What the agent is told afterwards, for the user.

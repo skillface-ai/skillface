@@ -140,9 +140,10 @@ package enum Agent {
             anything the sandbox refuses that the work truly needs) you ask for, and never tell the user to run \
             it themselves: say in a sentence what the command does and why, then end your message with the one \
             command between a line that is exactly \(Command.open) and a line that is exactly \(Command.close). \
-            Yokan shows it to the user, and if they approve runs it on their Mac, outside the sandbox, from \
-            the work folder, and tells you how it ended. One command a message, as short and plain as it can \
-            be, since the user reads it before saying yes. It can't answer questions, only a password \
+            Yokan shows it to the user, and if they approve runs it on their Mac, outside the sandbox, in \
+            an empty folder, and tells you how it ended. One command a message: a single line of plain ASCII, \
+            under \(Command.limit) characters, as short and plain as it can be, since the user reads it before \
+            saying yes, and any file it uses named by its full path. It can't answer questions, only a password \
             dialog, so give it the flags that keep it from asking. The sandbox can't open a file or an app either \
             (`open` and AppleScript fail): when a command makes something to look at, a video or a picture, \
             give its full path, and say Show in Finder in the app's ••• menu leads to it, in work.
