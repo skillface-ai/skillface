@@ -54,8 +54,8 @@ package final class AppModel {
     package private(set) var rules = ""
     /// Whether the user let this app run commands.
     package private(set) var terminal = false
-    /// Whether the user is being asked to let the open app run commands, and the session of the
-    /// agent that asked, which goes on once they say yes.
+    /// Whether the user is being asked to let the open app run commands, and what is said, in
+    /// which session, once they say yes: the agent that asked goes on, or a new app rehearses.
     package var allowing = false
     /// A command the open app's agent asked to have run outside its sandbox, for the user to
     /// read and say yes or no to.
@@ -65,7 +65,7 @@ package final class AppModel {
         package var id: String { session }
     }
     package var proposed: Proposal?
-    private var waiting: String?
+    private var waiting: (session: String, message: String)?
     package var notice: String?
     package var adding = false
     /// The sessions whose agent is answering, by id, whichever app they're in.
@@ -219,7 +219,14 @@ package final class AppModel {
         refresh()
         let asked = waiting
         waiting = nil
-        if terminal, let asked { send(Agent.allowed, in: asked) }
+        if terminal, let asked { send(asked.message, in: asked.session) }
+    }
+
+    /// A new app tries itself out before its user needs it to work, if the builder left it a
+    /// rehearsal. It runs commands, so the user is asked first, and saying no only skips it.
+    private func rehearse() {
+        guard Agent.rehearses(rules), useSessions.allSatisfy(\.messages.isEmpty), let id = sessionID else { return }
+        if terminal { send(Agent.rehearse, in: id) } else { (waiting, allowing) = ((id, Agent.rehearse), true) }
     }
 
     package func rename(_ app: SkillApp, to name: String) {
@@ -284,9 +291,11 @@ package final class AppModel {
         guard let app else { return }
         if let empty = useSessions.first(where: \.messages.isEmpty) { return sessionID = empty.id }
         let session = Session(kind: .use)
-        attempt { try home.save(session, in: app) }
-        sessionID = session.id
-        refresh()
+        attempt {
+            try home.save(session, in: app)
+            sessions = home.sessions(of: app)
+            sessionID = session.id
+        }
     }
 
     package func delete(_ session: Session) {
@@ -373,11 +382,14 @@ package final class AppModel {
             let answered = asked.text.isEmpty ? session : session.adding(Session.Message(role: .assistant, text: asked.text))
             attempt { try home.save(heard ? answered.begun() : answered, in: app) }
             // It needs a command run: the user is asked, right where they are.
-            if said.asks, session.kind == .use, selected == app.id, !home.runs(app) { (waiting, allowing) = (id, true) }
+            if said.asks, session.kind == .use, selected == app.id, !home.runs(app) { (waiting, allowing) = ((id, Agent.allowed), true) }
             // It needs one run outside the sandbox: the user reads it and decides.
             if let command = asked.command, session.kind == .use, selected == app.id, home.runs(app) { proposed = Proposal(session: id, command: command) }
         }
         if let failure { notice = failure }
-        if selected == app.id { refresh() }
+        guard selected == app.id else { return }
+        refresh()
+        // `app` is as it was when the turn began: this turn is the one that finished the build.
+        if app.info.stage != .done, self.app?.info.stage == .done { rehearse() }
     }
 }

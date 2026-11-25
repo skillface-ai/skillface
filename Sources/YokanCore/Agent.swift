@@ -52,6 +52,14 @@ package enum Agent {
     package static let asks = "[[terminal]]"
     /// And what it's sent for the user once they've said yes.
     package static let allowed = "You can run commands now. Go on."
+    /// What a new app is sent for the user before they need it to work: nothing in a build is ever
+    /// run, so its own agent goes through the workflow once, where a missing package costs nobody a turn.
+    package static let rehearse = "Rehearse: run the whole workflow once on a small example, and set up whatever it needs."
+
+    /// Whether the builder left a rehearsal in APP.md, which it does for a skill that runs something.
+    package static func rehearses(_ rules: String) -> Bool {
+        rules.split(whereSeparator: \.isNewline).contains { $0.trimmingCharacters(in: .whitespaces).lowercased() == "## rehearsal" }
+    }
 
     /// The switch's name in the app's menu. An app built before the mark has an APP.md that sends
     /// the user there, and an agent that follows it: naming the switch is asking too.
@@ -137,17 +145,33 @@ package enum Agent {
             that folder (`cd` there first), and keep memory for what's worth remembering, not for what commands \
             make. Install the Python packages a skill needs yourself, without asking: make a virtual environment \
             there once (`python3 -m venv .venv`), `pip install` into it, and run everything with its python. \
-            Check first what is already on this Mac. So a `pip install` is yours to run, never the user's. What pip can't give (Homebrew, a system tool, \
+            Check first what is already on this Mac. So a `pip install` is yours to run, never the user's. \
+            The sandbox has no display and no GPU, so whatever opens a window or an OpenGL context fails in it, \
+            and a tool that keeps a cache or a config in the home folder can't: point it at a folder in work \
+            (its own config, or an environment variable). Write a file with your file tool, not a shell heredoc. What pip can't give (Homebrew, a system tool, \
             anything the sandbox refuses that the work truly needs) you ask for, and never tell the user to run \
             it themselves: say in a sentence what the command does and why, then end your message with the one \
             command between a line that is exactly \(Command.open) and a line that is exactly \(Command.close). \
             Yokan shows it to the user, and if they approve runs it on their Mac, outside the sandbox, in \
-            an empty folder, and tells you how it ended. One command a message: a single line of plain ASCII, \
+            an empty folder, and tells you how it ended. Each one costs the user a wait, so find everything \
+            that's missing before you ask and ask for all of it at once (`brew install a b c`), and for a step \
+            of the work that can't run in the sandbox at all, write a script in work that does the whole step \
+            and ask for that. One command a message: a single line of plain ASCII, \
             under \(Command.limit) characters, as short and plain as it can be, since the user reads it before \
             saying yes, and any file it uses named by its full path. It can't answer questions, only a password \
             dialog, so give it the flags that keep it from asking. The sandbox can't open a file or an app either \
             (`open` and AppleScript fail): when a command makes something to look at, a video or a picture, \
             give its full path, and say Show in Finder in the app's ••• menu leads to it, in work.
+
+            What you learn about this Mac goes in memory's setup.md the moment you learn it: what is installed \
+            and where, the exact commands that worked, and whatever turned out different from what a skill or \
+            <app> says. Where setup.md says otherwise it holds over both, and no later session works any of it \
+            out again. When asked to rehearse, prove the app works before the user needs it to: carry the small \
+            example <app> describes through every step for real, with the real commands, to the last thing the \
+            workflow makes. Check first, in one go, for everything it needs, and fix and rerun whatever fails, \
+            until the whole run passes or only the user can unblock it. Then take the example's own entries out \
+            of memory unless <app> says they stay, keep in work what later sessions reuse, and say in two lines \
+            what works and what, if anything, is still missing.
             """
     }
 
@@ -166,12 +190,19 @@ package enum Agent {
             """)
     }
 
+    /// ponytail: a memory file longer than this is named in the prompt and read when needed.
+    static let memoryShown = 20_000
+
     /// What an app's agent is told on top of Claude Code's own prompt: the skill, what the
     /// builder added, and its memory.
     static func rules(for turn: AgentTurn) -> String {
         let memory = turn.memory.isEmpty
             ? "Nothing yet: this is the first session."
-            : turn.memory.map { "### \($0.name)\n\n\($0.text)" }.joined(separator: "\n\n")
+            : turn.memory.map { file in
+                // A big file (stills, a log) would be the whole prompt, every turn, and past a point no turn starts.
+                let text = file.text.count <= memoryShown ? file.text : "(\(file.text.count) characters, so not shown. Read it only if you need it.)"
+                return "### \(file.name)\n\n\(text)"
+            }.joined(separator: "\n\n")
         let rules = turn.rules.trimmingCharacters(in: .whitespacesAndNewlines)
         let made = made(for: turn)
         return """

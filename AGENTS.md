@@ -54,6 +54,10 @@ make run      # open the app
   (`--allowedTools`, a permission mode): without the sandbox it must stay denied. What the sandbox
   can't do (Homebrew, an installer) the agent asks for (`Command`), and Yokan runs it itself,
   unsandboxed, only after the user read that exact command and said yes, each time.
+- **A build runs nothing, so a new app rehearses.** The builder leaves a `## Rehearsal` in APP.md
+  for a skill that runs things (`Agent.rehearses`), and `AppModel` then asks for the terminal and
+  sends `Agent.rehearse` to the app's own agent, which keeps what it learns in `memory/setup.md`.
+  Don't give the builder a shell to check its own work.
 - A page loads
   nothing and goes nowhere (`Interface.policy`, `InterfaceView`'s delegate). Don't give the web
   view a base URL or a store that lasts.

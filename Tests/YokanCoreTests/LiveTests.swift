@@ -8,7 +8,9 @@ import Testing
 /// into an app in that folder, answering each question with its first choice and picking the
 /// second of the versions drawn, then uses it in
 /// two sessions, and prints what was said. What it proves is that the second session starts
-/// from what the first one learned.
+/// from what the first one learned. With `YOKAN_REPO=<link>` too it builds that repository into
+/// an app instead, and then lets it run commands and rehearse: what that proves is that a
+/// skill that runs things works before anyone uses it.
 struct LiveTests {
     private static let folder = ProcessInfo.processInfo.environment["YOKAN_LIVE"]
 
@@ -17,14 +19,16 @@ struct LiveTests {
         let session = try #require(home.sessions(of: app).first { $0.id == id })
         let turn = AgentTurn(
             app: app, session: session, message: message, memory: home.memory(of: app),
-            skill: home.text(at: app.skill), rules: home.text(at: app.rules), plugin: home.plugin)
+            skill: home.text(at: app.skill), skills: home.skills(of: app), terminal: home.runs(app),
+            rules: home.text(at: app.rules), plugin: home.plugin)
         var reply = Reply()
+        let began = Date.now
         for try await event in agent.events(for: turn) {
             reply = reply.applying(event)
             if case .doing(let what) = event { print("    · \(what)") }
         }
         try home.save(session.adding(.init(role: .user, text: message)).adding(.init(role: .assistant, text: reply.text)).begun(), in: app)
-        print("\n> \(message)\n\n\(reply.text)\n\(reply.error.map { "ERROR: \($0)" } ?? "")")
+        print("\n> \(message)\n\n\(reply.text)\n\(reply.error.map { "ERROR: \($0)" } ?? "")\n[\(Int(Date.now.timeIntervalSince(began)))s]")
         return reply.text
     }
 
@@ -41,17 +45,22 @@ struct LiveTests {
         #expect(!skills.isEmpty)
     }
 
-    @Test(.enabled(if: folder != nil), .timeLimit(.minutes(30)))
+    @Test(.enabled(if: folder != nil), .timeLimit(.minutes(90)))
     func aSkillBecomesAnAppThatRemembers() async throws {
         let home = YokanHome(root: URL(fileURLWithPath: try #require(Self.folder)))
         let agent = AgentProcess(errors: home.errors)
         try BuilderSkills.write(to: home.plugin)
-        let skill = try String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["YOKAN_SKILL"]), encoding: .utf8)
-        let app = try home.create(Skill(text: skill))
+        let repo = Repo(ProcessInfo.processInfo.environment["YOKAN_REPO"] ?? "")
+        let skill = try repo == nil ? String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["YOKAN_SKILL"]), encoding: .utf8) : ""
+        let app = if let repo {
+            try home.create(from: try await repo.download(into: FileManager.default.temporaryDirectory.appending(path: "yokan-live-\(UUID().uuidString)")), named: repo.title)
+        } else {
+            try home.create(Skill(text: skill))
+        }
         let build = try #require(app.info.buildSession)
         func stage() -> SkillApp.Stage? { home.apps().first { $0.id == app.id }?.info.stage }
 
-        var said = try await say(Agent.begin, in: build, of: app, home: home, agent: agent)
+        var said = try await say(repo == nil ? Agent.begin : Agent.beginAll, in: build, of: app, home: home, agent: agent)
         // Its first question comes with a rough sketch of each answer.
         print("\nSKETCHES: \(home.sketches(of: app).count) for \(Choices.split(said).choices.count) choices")
         #expect(home.sketches(of: app).count == Choices.split(said).choices.count)
@@ -77,6 +86,15 @@ struct LiveTests {
 
         let first = Session(kind: .use)
         try home.save(first, in: app)
+        guard repo == nil else {
+            // What the app does once it's built and its user lets it run commands.
+            #expect(Agent.rehearses(home.text(at: app.rules)))
+            try home.allow(app, toRun: true)
+            _ = try await say(Agent.rehearse, in: first.id, of: app, home: home, agent: agent)
+            print("\nSETUP: \(home.text(at: app.memory.appending(path: "setup.md")))")
+            #expect(!home.text(at: app.memory.appending(path: "setup.md")).isEmpty)
+            return
+        }
         _ = try await say("Teach me binary search. Yes, teach me properly.", in: first.id, of: app, home: home, agent: agent)
         _ = try await say("It halves a sorted list each step, so it takes about log2(n) steps. I've never implemented it though.", in: first.id, of: app, home: home, agent: agent)
         #expect(!home.memory(of: app).isEmpty)

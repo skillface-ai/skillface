@@ -67,7 +67,10 @@ package enum BuilderSkills {
         only in memory and in work/, where what a command makes \
         belongs. Where a skill runs something, plan for the agent running it there, tell the user now that \
         they'll be asked, and find what has to be installed first that pip can't give: the agent asks for each such command, and Yokan runs it once the user approves it. Where a skill \
-        needs the web, the agent does the thinking and tells the user what to fetch, or the step is left out.
+        needs the web, the agent does the thinking and tells the user what to fetch, or the step is left out. \
+        None of it is run during the build. The app's agent rehearses it once the app is built \
+        (yokan:implement), so note as you read what a run from start to finish takes: every tool and \
+        package the skills, their scripts and the README name, and the smallest example that would use them all.
 
         If the skills don't make a workflow, and it's a collection someone picks from, that is the answer: \
         the app is the place to pick one and use it, with one memory they all share.
@@ -286,6 +289,33 @@ package enum BuilderSkills {
 
         Write it to the agent, plainly, as short as covers those. Don't repeat the skill.
 
+        ## Write the rehearsal
+
+        Only for a skill that runs something: a script, a command-line tool, an install. Nothing in this \
+        build was run, since you can't run commands, so everything you wrote about running is a guess \
+        until it is. Yokan settles it before the user's first real session: it asks them to let the app \
+        run commands, and the app's agent then goes through the whole workflow once on a small example, \
+        in its sandbox, installing and fixing as it goes, and keeps what it learns in memory as \
+        `setup.md`. It does that only if APP.md has a section headed exactly `## Rehearsal`, which says:
+
+        - **The example.** The smallest input that still goes through every step and every tool: one \
+        three-second scene with one formula, not a ten-scene video; a file of two rows, not a dataset. \
+        Spelled out, so nothing has to be asked.
+        - **Each step, in order.** What the skill says to run, and what shows it worked: a file that \
+        exists, an exit status, a line of output. The last step ends in the thing the workflow is for, \
+        written to memory in the shapes above, so the interface is tried too.
+        - **What it needs.** Every tool and package the skill, its scripts and its README name, with \
+        versions where they give one, so all of it is checked for at once.
+        - **What you guessed.** A flag, a version, where output lands, whether a step runs in the \
+        sandbox at all: each is something to find out on the way.
+        - **Whether the example stays** in memory afterwards as a first thing to look at. Usually not.
+
+        Everywhere else in APP.md, don't state as fact what you couldn't check, and never say that \
+        something can't be installed or that the user must run a command themselves: say `setup.md` in \
+        memory has how things are on this Mac, and that it holds over APP.md.
+
+        Leave the section out for a skill that only thinks and talks. Then there is no rehearsal.
+
         ## Check
 
         Read interface.html once more against each of these, and fix what fails:
@@ -300,7 +330,8 @@ package enum BuilderSkills {
         ## Finish
 
         Set "stage" to "done" in app.json. Yokan then opens the app on its first session. Tell the user, in one \
-        line, that it's ready and what to say first.
+        line, that it's ready and what to say first. With a rehearsal, say instead that the app will now \
+        try itself out on a small example, and that they'll be asked to let it run commands for that.
         """
 
     static let interface = """

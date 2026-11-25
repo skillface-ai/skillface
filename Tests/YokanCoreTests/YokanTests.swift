@@ -230,6 +230,10 @@ struct HomeTests {
         #expect(home.runs(app) && !files.fileExists(atPath: app.folder.appending(path: "terminal.json").path))
         let runs = Agent.arguments(for: AgentTurn(app: app, session: Session(kind: .use), message: "Go", memory: [], skill: "", skills: home.skills(of: app), terminal: home.runs(app), rules: "", plugin: home.plugin))
         #expect(runs[runs.firstIndex(of: "--tools")! + 1].hasSuffix(",Agent,Bash") && runs.contains(app.work.path))
+        // A build runs nothing, so an app whose builder left it a rehearsal tries itself out first.
+        #expect(Agent.rehearses("# App\n\n## Rehearsal\n\nOne scene.") && !Agent.rehearses("# App\n\nNo rehearsal here.") && !Agent.rehearses(""))
+        #expect(runs[runs.firstIndex(of: "--append-system-prompt")! + 1].contains("When asked to rehearse") && !told.contains("When asked to rehearse"))
+        #expect(BuilderSkills.implement.contains("## Rehearsal"))
         let settings = try #require(JSONSerialization.jsonObject(with: Data(runs[runs.firstIndex(of: "--settings")! + 1].utf8)) as? [String: [String: Any]])
         #expect(settings["sandbox"]?["enabled"] as? Bool == true && settings["sandbox"]?["allowUnsandboxedCommands"] as? Bool == false)
         #expect((settings["sandbox"]?["filesystem"] as? [String: [String]])?["denyWrite"] == [app.source.path])
@@ -303,6 +307,10 @@ struct AgentTests {
         // It never starts empty: the skill, the app's rules and its memory are all there.
         let told = arguments[arguments.firstIndex(of: "--append-system-prompt")! + 1]
         for part in ["Ask ONE question at a time.", "Keep skill-map.json.", "### skill-map.json", #"{"level":3}"#] { #expect(told.contains(part)) }
+        // A memory too long to carry every turn is named, and read when it's needed.
+        let stills = TextFile(name: "stills.json", text: String(repeating: "A", count: Agent.memoryShown + 1))
+        let long = Agent.rules(for: AgentTurn(app: turn.app, session: turn.session, message: "Go", memory: [stills], skill: tutor, rules: "", plugin: turn.plugin))
+        #expect(long.contains("### stills.json") && !long.contains("AAAA"))
     }
 
     @Test func aLaterMessageResumesTheSession() throws {

@@ -24,6 +24,9 @@ is on screen, kept in memory, and tomorrow's session starts from where today's s
 4. **Shape.** Say what to change in the one you chose until it's right, then ship it.
 5. **Ship.** It writes what the running app needs (which memory to keep, and how) and checks
    its work. The app opens on its first session.
+6. **Rehearse**, for a skill that runs things. Nothing in a build is run, so the app tries itself
+   out first: it asks to run commands, goes through the whole workflow once on a small example,
+   installs and fixes what that turns up, and keeps what it learned in memory as `setup.md`.
 
 Home is that drop target with a dock of the apps you used last; **All apps** (⌘K) is the dock
 risen into a sheet, with the box to find one already taking the keyboard. An open app fills the
