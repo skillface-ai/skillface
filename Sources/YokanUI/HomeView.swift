@@ -374,7 +374,7 @@ struct ProviderPicker: View {
 
     var body: some View {
         Picker("Agent", selection: Binding(get: { model.provider }, set: { model.selectProvider($0) })) {
-            ForEach(AgentProvider.allCases, id: \.self) { provider in
+            ForEach(model.installed, id: \.self) { provider in
                 Text(provider.name).tag(provider)
             }
         }

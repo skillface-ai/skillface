@@ -52,7 +52,8 @@ An app is a folder in `~/Library/Application Support/Yokan/Apps/`:
 | `sessions/` | Every conversation, one JSON file each |
 
 Choose **Claude Code** or **Codex** from the **Agent** picker on Home or in an open app’s **•••** menu.
-The choice is saved for all apps and takes effect on the next message, including in the builder.
+Yokan looks for both at launch and offers the ones this Mac has; if the one you chose is gone, it
+uses the other. The choice is saved for all apps and takes effect on the next message, including in the builder.
 Install and sign in to the selected CLI in Terminal first. Codex requires a CLI with named
 permission profiles and `exec --ignore-user-config` support (developed with 0.171.0).
 

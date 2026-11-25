@@ -70,9 +70,8 @@ package struct Skill: Equatable, Sendable {
 
     package static func installed(for provider: AgentProvider) -> [Skill] {
         guard provider == .codex else { return installed() }
-        let environment = ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let codex = environment["CODEX_HOME"].map { URL(fileURLWithPath: $0) } ?? home.appending(path: ".codex")
+        let codex = URL(fileURLWithPath: (Agent.codexHome as NSString).expandingTildeInPath)
         let skills = installed(in: home.appending(path: ".agents/skills")) + installed(in: codex.appending(path: "skills"))
         var names = Set<String>()
         return skills.filter { names.insert($0.name).inserted }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }

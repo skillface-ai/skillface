@@ -18,6 +18,8 @@ package final class AppModel {
 
     package let home: YokanHome
     package private(set) var provider: AgentProvider
+    /// The agents to choose from: every one until the Mac's been looked over, then those it has.
+    package private(set) var installed = AgentProvider.allCases
     private let agent: AgentProcess
 
     package private(set) var apps: [SkillApp] = []
@@ -84,6 +86,20 @@ package final class AppModel {
         attempt { try BuilderSkills.write(to: home.plugin) }
         if case .failure(let error) = moved { notice = error.localizedDescription }
         (apps, arrangement) = (home.apps(), home.arrangement())
+        // ponytail: looked for once, at launch. Look again when the app comes forward if
+        // installing a CLI without restarting Yokan matters.
+        Task { [weak self, agent = self.agent] in
+            let found = await Task.detached { agent.installed() }.value
+            self?.found(found)
+        }
+    }
+
+    /// With none installed every agent stays offered, so choosing one says how to install it.
+    /// The choice on disk is left alone: it's the user's, and is back once that CLI is.
+    private func found(_ found: [AgentProvider]) {
+        guard let first = found.first else { return }
+        installed = found
+        if !found.contains(provider) { provider = first }
     }
 
     // MARK: What's showing
@@ -167,7 +183,7 @@ package final class AppModel {
 
     package func selectProvider(_ choice: AgentProvider) {
         attempt { try home.selectProvider(choice) }
-        provider = home.provider
+        provider = installed.contains(home.provider) ? home.provider : provider
     }
 
     // MARK: Apps

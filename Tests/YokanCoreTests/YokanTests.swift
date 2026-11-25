@@ -470,6 +470,14 @@ struct ProviderTests {
                          terminal: terminal, rules: "", plugin: home.plugin, provider: .codex)
     }
 
+    @Test func onlyTheInstalledAgentsAreFound() {
+        let agent = AgentProcess(errors: home.errors) { provider in
+            guard provider == .codex else { throw YokanError("not here") }
+            return (URL(fileURLWithPath: "/bin/sh"), "/bin")
+        }
+        #expect(agent.installed() == [.codex])
+    }
+
     @Test func providerPersistsAndFallsBackForExistingHomes() throws {
         #expect(home.provider == .claude)
         try home.selectProvider(.codex)
@@ -499,6 +507,18 @@ struct ProviderTests {
         #expect(home.text(at: turn.app.memory.appending(path: "notes/today.md")) == "Practice")
         #expect(Agent.arguments(for: turn).last?.contains("First reply") == true)
         #expect(Agent.arguments(for: turn).contains("--session-id"))
+    }
+
+    @Test func aMovedSignInFolderIsStillDenied() throws {
+        #expect(Agent.folder("CODEX_HOME", or: "~/.codex", in: ["CODEX_HOME": "/moved"]) == "/moved")
+        #expect(Agent.folder("CODEX_HOME", or: "~/.codex", in: ["CODEX_HOME": ""]) == "~/.codex")
+        #expect(Agent.folder("CODEX_HOME", or: "~/.codex", in: [:]) == "~/.codex")
+        // Both agents' commands are kept out of Codex's, and Codex's out of Claude Code's too.
+        #expect(Agent.secrets.contains(Agent.codexHome))
+        let profile = try CodexInvocation(try turn(.use, terminal: true), executable: URL(fileURLWithPath: "/bin/sh"))
+        defer { profile.cleanUp() }
+        let denied = { (path: String) in profile.arguments.contains { $0.contains("\"\((path as NSString).expandingTildeInPath)\"=\"deny\"") } }
+        #expect(denied(Agent.codexHome) && denied(Agent.claudeHome))
     }
 
     @Test func codexRelaunchesTheResolvedBinaryWithOnlyThatFileReadable() async throws {

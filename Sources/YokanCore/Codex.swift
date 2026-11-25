@@ -56,7 +56,7 @@ struct CodexInvocation {
             if turn.runs {
                 // A named profile avoids the implicit writable cwd and temporary folders of workspace-write.
                 var permissions = [":root": "read", turn.app.memory.path: "write", turn.app.work.path: "write"]
-                for path in Agent.secrets + ["~/.codex", "~/.claude"] {
+                for path in Agent.secrets + [Agent.claudeHome] {
                     permissions[(path as NSString).expandingTildeInPath] = "deny"
                 }
                 // Codex re-executes itself inside the sandbox, including when its binary lives under ~/.codex.

@@ -105,7 +105,16 @@ package enum Agent {
     /// What the user's secrets are kept in, which no command may read.
     /// ponytail: a short list of the usual places. A command can read the rest of the disk, and
     /// with only `registries` to reach has nowhere to send it. Deny reading the home folder if that isn't enough.
-    static let secrets = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gh", "~/.netrc", "~/Library/Keychains"]
+    static let secrets = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gh", "~/.netrc", "~/Library/Keychains", codexHome]
+
+    /// Where a CLI keeps its sign-in. The user's environment can move it, and what's denied has to
+    /// follow: denying only the usual place would leave the real one readable.
+    static func folder(_ variable: String, or usual: String, in environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
+        environment[variable].flatMap { $0.isEmpty ? nil : $0 } ?? usual
+    }
+    static let codexHome = folder("CODEX_HOME", or: "~/.codex")
+    /// Not in `secrets`: Claude Code's own shell reads from here, and its sign-in is in the keychain.
+    static let claudeHome = folder("CLAUDE_CONFIG_DIR", or: "~/.claude")
 
     /// The only hosts a command can reach: where Python's packages come from, so an app installs
     /// what its skill needs, into `work/`, without the user. Nothing can be sent to either.
@@ -385,6 +394,11 @@ package final class AgentProcess: Sendable {
 
     package init(errors: URL, find: @escaping Find = AgentProcess.loginShell) {
         (self.errors, self.find) = (errors, find)
+    }
+
+    /// The CLIs this Mac has, in the order they're offered. Slow: a login shell for each.
+    package func installed() -> [AgentProvider] {
+        AgentProvider.allCases.filter { (try? find($0)) != nil }
     }
 
     /// Stops the CLI when the listener cancels.
