@@ -17,6 +17,7 @@ package final class AppModel {
     }
 
     package let home: YokanHome
+    package private(set) var provider: AgentProvider
     private let agent: AgentProcess
 
     package private(set) var apps: [SkillApp] = []
@@ -77,6 +78,7 @@ package final class AppModel {
         // one would never be moved to it.
         let moved = given == nil ? Result { try YokanHome.adoptFormer() } : .success(())
         let home = given ?? .standard()
+        self.provider = home.provider
         self.home = home
         self.agent = agent ?? AgentProcess(errors: home.errors)
         attempt { try BuilderSkills.write(to: home.plugin) }
@@ -161,6 +163,11 @@ package final class AppModel {
     private func open() {
         (sessionID, designID, showingAll, knowing, showingSkill) = (nil, nil, false, false, false)
         refresh()
+    }
+
+    package func selectProvider(_ choice: AgentProvider) {
+        attempt { try home.selectProvider(choice) }
+        provider = home.provider
     }
 
     // MARK: Apps
@@ -347,7 +354,7 @@ package final class AppModel {
     package func send(_ text: String, in id: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let app, !text.isEmpty, live[id] == nil, let asked = sessions.first(where: { $0.id == id }) else { return }
-        let session = asked.adding(Session.Message(role: .user, text: text))
+        let session = asked.adding(Session.Message(role: .user, text: text, provider: provider))
         do { try home.save(session, in: app) } catch { return notice = error.localizedDescription }
         // The question they were for is answered.
         if asked.kind == .build {
@@ -355,7 +362,7 @@ package final class AppModel {
             sketched = 0
         }
         // The turn carries the session as Claude Code has it: `started` says whether to resume.
-        let turn = AgentTurn(app: app, session: asked, message: text, memory: memory, skill: skill, skills: skills, terminal: terminal, rules: rules, plugin: home.plugin)
+        let turn = AgentTurn(app: app, session: asked, message: text, memory: memory, skill: skill, skills: skills, terminal: terminal, rules: rules, plugin: home.plugin, provider: provider)
         live[id] = Live(text: "", status: "")
         refresh()
         tasks[id] = Task { [weak self, agent] in
@@ -369,18 +376,18 @@ package final class AppModel {
             } catch {
                 failure = error.localizedDescription
             }
-            self?.finished(id, in: app, reply: reply, heard: heard, failure: failure ?? reply.error)
+            self?.finished(id, in: app, provider: turn.provider, reply: reply, heard: heard, failure: failure ?? reply.error)
         }
     }
 
     /// Keeps whatever was said, even from a turn that was stopped or failed part-way.
-    private func finished(_ id: String, in app: SkillApp, reply: Reply, heard: Bool, failure: String?) {
+    private func finished(_ id: String, in app: SkillApp, provider: AgentProvider, reply: Reply, heard: Bool, failure: String?) {
         (live[id], tasks[id]) = (nil, nil)
         if let session = home.sessions(of: app).first(where: { $0.id == id }) {
             let said = Agent.asking(reply.text)
             let asked = Command.asked(in: said.text)
-            let answered = asked.text.isEmpty ? session : session.adding(Session.Message(role: .assistant, text: asked.text))
-            attempt { try home.save(heard ? answered.begun() : answered, in: app) }
+            let answered = asked.text.isEmpty ? session : session.adding(Session.Message(role: .assistant, text: asked.text, provider: provider))
+            attempt { try home.save(heard && provider == .claude ? answered.begun() : answered, in: app) }
             // It needs a command run: the user is asked, right where they are.
             if said.asks, session.kind == .use, selected == app.id, !home.runs(app) { (waiting, allowing) = ((id, Agent.allowed), true) }
             // It needs one run outside the sandbox: the user reads it and decides.

@@ -13,7 +13,7 @@ is on screen, kept in memory, and tomorrow's session starts from where today's s
 
 ## The flow
 
-1. **Drop a skill** on home, paste one or a link to one, or pick one Claude Code already has.
+1. **Drop a skill** on home, paste one or a link to one, or pick an installed skill from the selected agent.
    A link to a GitHub repository, or a dropped folder of skills, makes one app from all of them.
 2. **Read.** The builder reads the skill and asks what only you can answer, one question at a
    time, with the likely answers as buttons. Given a repository, it first reads all of it and
@@ -51,16 +51,18 @@ An app is a folder in `~/Library/Application Support/Yokan/Apps/`:
 | `work/` | Where its commands run and what they make, if you let it run any |
 | `sessions/` | Every conversation, one JSON file each |
 
-Both agents are your own [Claude Code](https://claude.com/claude-code), run headless and
-contained: no shell, no web, none of your settings. The builder works in the app's folder with
-six skills (`explore`, for a repository, then `interview`, `design`, `adjust`, `implement`, and
-`interface`, the contract a page is written to). The app's own agent, and any subagents it hands work to, work in `memory/` and
-nowhere else, so using an app can never change its skill or its interface. An app made from a
-repository is told which skills it has and reads each from `source/` when its turn comes. Each session is a Claude Code session, resumed message by
-message; a new one is started with the skill, `APP.md`, and the memory as it stands.
+Choose **Claude Code** or **Codex** from the **Agent** picker on Home or in an open app’s **•••** menu.
+The choice is saved for all apps and takes effect on the next message, including in the builder.
+Install and sign in to the selected CLI in Terminal first. Codex requires a CLI with named
+permission profiles and `exec --ignore-user-config` support (developed with 0.171.0).
+
+Claude Code resumes its native session. Codex receives Yokan’s saved conversation and current
+app files each turn. Switching back to Claude includes the exchange it missed. The builder
+uses the same six skills with either CLI. Without terminal access, Codex returns its reply
+and proposed file changes together. Yokan saves builder files or session memory as appropriate.
 
 A skill that runs scripts needs a shell. An app gets one only when you turn on **Use the
-Terminal** in its ••• menu, and then inside Claude Code's sandbox: no network but PyPI, for the Python packages a skill needs, and it can write
+Terminal** in its ••• menu, and then inside the selected agent’s sandbox: no network but PyPI, for the Python packages a skill needs, and it can write
 only in its `memory/` and `work/`. It can read most other files on your Mac. Python packages it
 installs itself, into `work/`; anything else a script needs (Homebrew, LaTeX), it shows you
 the command and runs it on your Mac once you approve it.

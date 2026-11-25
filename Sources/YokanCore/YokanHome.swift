@@ -36,6 +36,15 @@ package struct YokanHome: Sendable {
         }
     }
 
+    package var provider: AgentProvider {
+        AgentProvider(rawValue: text(at: root.appending(path: "provider"))) ?? .claude
+    }
+
+    package func selectProvider(_ provider: AgentProvider) throws {
+        try Self.files.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data(provider.rawValue.utf8).write(to: root.appending(path: "provider"), options: .atomic)
+    }
+
     private var appsFolder: URL { root.appending(path: "Apps") }
     /// The builder's skills, as the Claude Code plugin a build runs with.
     package var plugin: URL { root.appending(path: "Builder/plugin") }
@@ -271,9 +280,8 @@ package struct YokanHome: Sendable {
     }
 
     package func remember(_ text: String, as name: String, in app: SkillApp) throws {
-        let file = try memoryFile(name, of: app)
-        try Self.files.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(text.utf8).write(to: file, options: .atomic)
+        _ = try memoryFile(name, of: app)
+        try Self.write(Data(text.utf8), at: "memory/" + name, in: app)
     }
 
     package func forget(_ name: String, in app: SkillApp) throws {
@@ -308,10 +316,119 @@ package struct YokanHome: Sendable {
             $0.dateEncodingStrategy = .iso8601
             $0.outputFormatting = [.prettyPrinted]
         }
-        try encoder.encode(session).write(to: try file(of: session, in: app), options: .atomic)
+        let url = try file(of: session, in: app)
+        do {
+            try Self.files.createDirectory(at: app.sessions, withIntermediateDirectories: false)
+        } catch CocoaError.fileWriteFileExists {
+            // Most saves, including another session opening concurrently, already have a folder.
+        }
+        try encoder.encode(session).write(to: url, options: .atomic)
     }
 
     package func delete(_ session: Session, in app: SkillApp) throws {
         try Self.files.trashItem(at: try file(of: session, in: app), resultingItemURL: nil)
+    }
+}
+
+extension YokanHome {
+    private static let builderFiles = ["app.json", "interface.html", "APP.md", "demo.json"]
+
+    static func codexContext(_ turn: AgentTurn) -> [String: String] {
+        let build = turn.session.kind == .build
+        let root = turn.app.folder
+        var files = build ? Dictionary(turn.memory.map { ("memory/" + $0.name, $0.text) }, uniquingKeysWith: { first, _ in first }) : [:]
+        let folders = build ? ["source", "designs", "sketches"] : ["source"]
+        var paths = build ? (builderFiles + ["SKILL.md"]).map { root.appending(path: $0) } : []
+        for folder in folders {
+            let url = root.appending(path: folder)
+            guard url.resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().appending(path: folder).path else { continue }
+            let entries = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: .skipsHiddenFiles)
+            paths += entries?.allObjects as? [URL] ?? []
+        }
+        for url in paths {
+            // Both resolved: a folder's contents come back under its real path, which needn't be the one asked for.
+            let path = String(url.resolvingSymlinksInPath().path.dropFirst(root.resolvingSymlinksInPath().path.count + 1))
+            guard url.resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().appending(path: path).path,
+                  (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+            files[path] = try? String(contentsOf: url, encoding: .utf8)
+        }
+        // Codex refuses a turn over a million characters, and a repository can be more than that.
+        // The app's own files go first, then each skill, then the rest of `source/`, smallest first.
+        var left = codexBudget
+        func rank(_ path: String) -> Int { !path.hasPrefix("source/") ? 0 : path.hasSuffix("SKILL.md") ? 1 : 2 }
+        for (path, text) in files.sorted(by: { (rank($0.key), $0.value.count, $0.key) < (rank($1.key), $1.value.count, $1.key) }) {
+            if text.count <= left { left -= text.count } else { files[path] = codexLeftOut }
+        }
+        return files
+    }
+
+    /// ponytail: what's past the budget is named and not sent, so Codex builds without having
+    /// read it. Send those files in a second turn if a build needs what it left out.
+    static let codexBudget = 600_000
+    static let codexLeftOut = "(Too long to send with the rest. Work from the files you were given.)"
+
+    func apply(_ files: [CodexInvocation.Answer.File], to turn: AgentTurn) throws {
+        let build = turn.session.kind == .build
+        for file in files {
+            let parts = file.path.components(separatedBy: "/")
+            let inDesigns = parts.count == 2 && ["sketches", "designs"].contains(parts[0]) &&
+                (parts[1].hasSuffix(".html") || file.path == "designs/index.json")
+            guard parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && !$0.contains("\0") }),
+                  !build || Self.builderFiles.contains(file.path) || inDesigns,
+                  Self.hasNoLink(from: turn.app.folder, parts: (build ? [] : ["memory"]) + parts) else {
+                throw YokanError("Codex requested a file outside this turn’s writable files: \(file.path)")
+            }
+        }
+        // Publish stage changes only after every file for that stage is in place.
+        let metadata = try files.last(where: { $0.path == "app.json" && build }).map {
+            try JSONDecoder().decode(SkillApp.Info.self, from: Data($0.text.utf8))
+        }
+        for file in files {
+            if !build {
+                try remember(file.text, as: file.path, in: turn.app)
+            } else if file.path != "app.json" {
+                try Self.write(Data(file.text.utf8), at: file.path, in: turn.app)
+            }
+        }
+        if let metadata { try save(metadata.built(in: turn.session.id), of: turn.app) }
+    }
+
+    /// A command in another session can change a memory subfolder between a path check and a
+    /// write. Hold the parent open and replace the file relative to it, without following links.
+    private static func write(_ data: Data, at path: String, in app: SkillApp) throws {
+        let parts = path.components(separatedBy: "/")
+        guard let name = parts.last,
+              parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && !$0.contains("\0") })
+        else { throw YokanError("Invalid file path: \(path)") }
+        let flags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+        var parent = Darwin.open(app.folder.path, flags)
+        guard parent >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+        defer { Darwin.close(parent) }
+        for part in parts.dropLast() {
+            if mkdirat(parent, part, 0o700) < 0 && errno != EEXIST {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            }
+            let child = openat(parent, part, flags)
+            guard child >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+            Darwin.close(parent)
+            parent = child
+        }
+        let temporary = ".yokan-" + UUID().uuidString
+        let fd = openat(parent, temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+        defer { unlinkat(parent, temporary, 0) }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        try handle.write(contentsOf: data)
+        try handle.close()
+        guard renameat(parent, temporary, parent, name) == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+    }
+
+    private static func hasNoLink(from root: URL, parts: [String]) -> Bool {
+        var file = root
+        for part in parts {
+            file.append(path: part)
+            if (try? FileManager.default.destinationOfSymbolicLink(atPath: file.path)) != nil { return false }
+        }
+        return true
     }
 }

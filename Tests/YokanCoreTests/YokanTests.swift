@@ -270,6 +270,15 @@ struct HomeTests {
         #expect(home.skills(of: one).isEmpty)
     }
 
+    @Test func aMissingSessionsFolderIsRestoredOnSave() throws {
+        let home = temporaryHome()
+        let app = try home.create(Skill(text: tutor))
+        try FileManager.default.removeItem(at: app.sessions)
+        let session = Session(kind: .use)
+        try home.save(session, in: app)
+        #expect(home.sessions(of: app).map(\.id) == [session.id])
+    }
+
     @Test func sessionsComeBackNewestFirst() throws {
         let home = temporaryHome()
         let app = try home.create(Skill(text: tutor))
@@ -387,7 +396,7 @@ struct AgentTests {
             printf '%s\\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}' '{"type":"result","is_error":false}'
             """.utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        let agent = AgentProcess(errors: turn.app.folder.appending(path: "errors.log")) { (script, "/usr/bin:/bin") }
+        let agent = AgentProcess(errors: turn.app.folder.appending(path: "errors.log")) { _ in (script, "/usr/bin:/bin") }
         var events: [AgentEvent] = []
         for try await event in agent.events(for: turn) { events.append(event) }
         #expect(events == [.said("Hello"), .done(error: nil)])
@@ -400,7 +409,7 @@ struct AgentTests {
         let script = turn.app.folder.appending(path: "claude")
         try Data("#!/bin/sh\necho 'Disk is full' >&2\nexit 1\n".utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        let agent = AgentProcess(errors: turn.app.folder.appending(path: "errors.log")) { (script, "/usr/bin:/bin") }
+        let agent = AgentProcess(errors: turn.app.folder.appending(path: "errors.log")) { _ in (script, "/usr/bin:/bin") }
         await #expect(throws: YokanError("Disk is full")) {
             for try await _ in agent.events(for: turn) {}
         }
@@ -447,5 +456,114 @@ struct InterfaceTests {
         #expect(asked.choices == ["The map, always", "Only the question"])
         #expect(Choices.split("- [ ] not last\nBecause this is.").choices.isEmpty)
         #expect(Choices.split("No choices.").body == "No choices.")
+    }
+}
+
+struct ProviderTests {
+    let home = temporaryHome()
+
+    private func turn(_ kind: Session.Kind, terminal: Bool = false) throws -> AgentTurn {
+        let app = try home.create(Skill(text: tutor))
+        let session = Session(kind: kind, messages: [.init(role: .user, text: "First question"),
+                                                    .init(role: .assistant, text: "First reply", provider: .codex)])
+        return AgentTurn(app: app, session: session, message: "Next question", memory: [], skill: tutor,
+                         terminal: terminal, rules: "", plugin: home.plugin, provider: .codex)
+    }
+
+    @Test func providerPersistsAndFallsBackForExistingHomes() throws {
+        #expect(home.provider == .claude)
+        try home.selectProvider(.codex)
+        #expect(YokanHome(root: home.root).provider == .codex)
+        try home.selectProvider(.claude)
+        #expect(home.provider == .claude)
+    }
+
+    @Test func codexRunsWithConversationAndSavesMemory() async throws {
+        let turn = try turn(.use)
+        let script = home.root.appending(path: "codex")
+        try Data("""
+            #!/bin/sh
+            cat > input.txt
+            grep -q 'First reply' input.txt && grep -q 'Next question' input.txt || exit 1
+            echo '{"message":"Saved.","files":[{"path":"notes/today.md","text":"Practice"}]}' > answer
+            echo '{"type":"turn.completed"}'
+            """.utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let agent = AgentProcess(errors: home.errors) { provider in
+            #expect(provider == .codex)
+            return (script, "/usr/bin:/bin")
+        }
+        var events = [AgentEvent]()
+        for try await event in agent.events(for: turn) { events.append(event) }
+        #expect(events == [.touched, .said("Saved."), .done(error: nil)])
+        #expect(home.text(at: turn.app.memory.appending(path: "notes/today.md")) == "Practice")
+        #expect(Agent.arguments(for: turn).last?.contains("First reply") == true)
+        #expect(Agent.arguments(for: turn).contains("--session-id"))
+    }
+
+    @Test func codexRelaunchesTheResolvedBinaryWithOnlyThatFileReadable() async throws {
+        let turn = try turn(.use, terminal: true)
+        let binary = home.root.appending(path: "codex-release")
+        let launcher = home.root.appending(path: "codex")
+        try Data("""
+            #!/bin/sh
+            test ! -L "$0" || exit 1
+            for arg do
+                case "$arg" in permissions.yokan.filesystem=*) profile=$arg ;; esac
+            done
+            case "$profile" in *'"'"$0"'"="read"'*) ;; *) exit 2 ;; esac
+            case "$profile" in *'/.codex"="deny"'*) ;; *) exit 3 ;; esac
+            printf '%s' 'Rendered.' > answer
+            echo '{"type":"turn.completed"}'
+            """.utf8).write(to: binary)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+        try FileManager.default.createSymbolicLink(at: launcher, withDestinationURL: binary)
+        let agent = AgentProcess(errors: home.errors) { _ in (launcher, "/usr/bin:/bin") }
+        var events = [AgentEvent]()
+        for try await event in agent.events(for: turn) { events.append(event) }
+        #expect(events == [.said("Rendered."), .done(error: nil)])
+    }
+
+    @Test func codexBuilderKeepsItsFilesAndPermissions() throws {
+        let turn = try turn(.build, terminal: true)
+        let request = try CodexInvocation(turn, executable: URL(fileURLWithPath: "/bin/sh"))
+        defer { request.cleanUp() }
+        #expect(request.arguments.contains("read-only"))
+        #expect(request.arguments.contains("shell_tool"))
+        let prompt = try String(contentsOf: request.input, encoding: .utf8)
+        #expect(prompt.contains(BuilderSkills.interface) && prompt.contains("Ask ONE question"))
+        // A repository longer than Codex takes is sent as far as it fits, its skills first.
+        try FileManager.default.createDirectory(at: turn.app.source, withIntermediateDirectories: true)
+        try Data("skill".utf8).write(to: turn.app.source.appending(path: "SKILL.md"))
+        try Data(String(repeating: "x", count: YokanHome.codexBudget).utf8).write(to: turn.app.source.appending(path: "big.txt"))
+        let sent = YokanHome.codexContext(turn)
+        #expect(sent["source/SKILL.md"] == "skill" && sent["source/big.txt"] == YokanHome.codexLeftOut && sent["interface.html"] == Interface.starter)
+        let output = request.directory.appending(path: "answer")
+        for path in ["memory/file", "../provider", "source/SKILL.md", "sessions/x.json"] {
+            try Data(#"{"message":"Done","files":[{"path":"\#(path)","text":"wrong"}]}"#.utf8).write(to: output)
+            #expect(throws: YokanError.self) { try request.finish(turn) }
+        }
+        try Data(#"{"message":"Choose","files":[{"path":"designs/A.html","text":"Design"},{"path":"app.json","text":"{\"stage\":\"design\",\"name\":\"Tutor\"}"}]}"#.utf8).write(to: output)
+        _ = try request.finish(turn)
+        #expect(home.designs(of: turn.app).first?.html == "Design")
+        #expect(home.apps().first?.info.stage == .design)
+        #expect(home.apps().first?.info.buildSession == turn.session.id)
+    }
+
+    @Test func codexMemoryRejectsSymlinksAndTerminalRequiresConsent() throws {
+        let turn = try turn(.use)
+        let request = try CodexInvocation(turn, executable: URL(fileURLWithPath: "/bin/sh"))
+        defer { request.cleanUp() }
+        try FileManager.default.createSymbolicLink(at: turn.app.memory.appending(path: "outside"), withDestinationURL: home.root)
+        try Data(#"{"message":"Done","files":[{"path":"outside/new/file","text":"wrong"}]}"#.utf8)
+            .write(to: request.directory.appending(path: "answer"))
+        #expect(throws: YokanError.self) { try request.finish(turn) }
+        let allowed = try self.turn(.use, terminal: true)
+        let invocation = try CodexInvocation(allowed, executable: URL(fileURLWithPath: "/bin/sh"))
+        defer { invocation.cleanUp() }
+        #expect(invocation.arguments.contains("default_permissions=\"yokan\""))
+        let filesystem = invocation.arguments.first { $0.hasPrefix("permissions.yokan.filesystem=") } ?? ""
+        for url in [allowed.app.memory, allowed.app.work] { #expect(filesystem.contains("\"\(url.path)\"=\"write\"")) }
+        #expect(!invocation.arguments.contains("--output-schema"))
     }
 }

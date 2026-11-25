@@ -118,7 +118,10 @@ package struct Session: Codable, Identifiable, Equatable, Sendable {
     package struct Message: Codable, Equatable, Sendable {
         package let role: Role
         package let text: String
-        package init(role: Role, text: String) { (self.role, self.text) = (role, text) }
+        package let provider: AgentProvider?
+        package init(role: Role, text: String, provider: AgentProvider? = nil) {
+            (self.role, self.text, self.provider) = (role, text, provider)
+        }
     }
 
     package let id: String

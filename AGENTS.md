@@ -16,6 +16,7 @@ to come back to. README.md has the product and the flow. Its architecture follow
   - `YokanHome.swift`: where everything lives. Every read and write of an app's folder.
   - `Agent.swift`: `AgentTurn`, Claude Code's flags and what it's told (`Agent`), its stream
     (`AgentStream`, `AgentEvent`, `Reply`), and running it (`AgentProcess`).
+  - `Codex.swift`: the provider choice, conversation handoff, and restricted Codex CLI invocation.
   - `BuilderSkills.swift`: the builder's six skills, written out as a Claude Code plugin.
   - `Interface.swift`: what an `interface.html` is given: `bridge` (`window.yokan`), `css`,
     `policy`, the starter page, and the `State` it's handed.
@@ -50,7 +51,9 @@ make run      # open the app
 - **An app runs commands only when its user said so, and only in the sandbox.** The say-so is in
   `terminal.json` beside the apps (`YokanHome.runs`), never in an app's folder, which an agent
   writes. Then its own agent, never the builder, gets Bash under `Agent.sandbox(for:)`: no network but PyPI (`Agent.registries`),
-  no way out of the sandbox, writing only `memory/` and `work/`. Don't allow Bash any other way
+  no way out of the sandbox, writing only `memory/` and `work/`. Codex uses a named permission profile
+  for these same folders and registries. Without terminal permission it returns structured file changes
+  for Yokan to validate, with the shell disabled. Don't allow Bash any other way
   (`--allowedTools`, a permission mode): without the sandbox it must stay denied. What the sandbox
   can't do (Homebrew, an installer) the agent asks for (`Command`), and Yokan runs it itself,
   unsandboxed, only after the user read that exact command and said yes, each time.

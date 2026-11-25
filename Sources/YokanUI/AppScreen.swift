@@ -35,6 +35,8 @@ struct AppScreen: View {
                         .help("Change how \(app.info.name) looks and works")
                 }
                 Menu {
+                    ProviderPicker(model: model)
+                    Divider()
                     Button(model.skills.isEmpty ? "Skill…" : "Skills…") { model.showingSkill = true }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([app.folder]) }
                     // Turning it on is asked about: turning it off never is.

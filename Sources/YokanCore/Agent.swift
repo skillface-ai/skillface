@@ -2,6 +2,7 @@ import Foundation
 
 /// One message to an app's agent, or to the builder: everything Claude Code is started with.
 package struct AgentTurn: Sendable {
+    package let provider: AgentProvider
     package let app: SkillApp
     package let session: Session
     package let message: String
@@ -18,8 +19,9 @@ package struct AgentTurn: Sendable {
 
     package init(
         app: SkillApp, session: Session, message: String, memory: [TextFile], skill: String, skills: [SourceSkill] = [],
-        terminal: Bool = false, rules: String, plugin: URL
+        terminal: Bool = false, rules: String, plugin: URL, provider: AgentProvider = .claude
     ) {
+        self.provider = provider
         (self.app, self.session, self.message, self.memory) = (app, session, message, memory)
         (self.skill, self.skills, self.terminal, self.rules, self.plugin) = (skill, skills, terminal, rules, plugin)
     }
@@ -97,7 +99,7 @@ package enum Agent {
             + ["--permission-mode", "acceptEdits", "--permission-prompts", "none"]
             + (build ? ["--plugin-dir", turn.plugin.path] : []) + reach
             + ["--output-format", "stream-json", "--verbose", "--include-partial-messages"]
-            + session + ["--append-system-prompt", build ? builder(for: turn) : rules(for: turn), "--", turn.message]
+            + session + ["--append-system-prompt", build ? builder(for: turn) : rules(for: turn), "--", turn.claudeMessage]
     }
 
     /// What the user's secrets are kept in, which no command may read.
@@ -373,10 +375,10 @@ package struct Reply: Equatable, Sendable {
     }
 }
 
-/// Runs a turn: the user's Claude Code, in the turn's folder, its events as they come.
+/// Runs the selected CLI and translates its output into events for the open session.
 package final class AgentProcess: Sendable {
-    /// Where Claude Code is, and the PATH it runs with.
-    package typealias Find = @Sendable () throws -> (claude: URL, path: String)
+    /// Where the selected CLI is, and the PATH it runs with.
+    package typealias Find = @Sendable (AgentProvider) throws -> (executable: URL, path: String)
 
     private let errors: URL
     private let find: Find
@@ -385,24 +387,30 @@ package final class AgentProcess: Sendable {
         (self.errors, self.find) = (errors, find)
     }
 
-    /// Ends when the turn does; stops Claude Code if whoever is listening stops.
+    /// Stops the CLI when the listener cancels.
     package func events(for turn: AgentTurn) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task.detached { [errors, find] in
                 do {
-                    let found = try find()
+                    let found = try find(turn.provider)
                     try FileManager.default.createDirectory(at: turn.folder, withIntermediateDirectories: true)
                     if turn.runs { try FileManager.default.createDirectory(at: turn.app.work, withIntermediateDirectories: true) }
-                    FileManager.default.createFile(atPath: errors.path, contents: nil)
+                    // Other sessions may be running a different CLI at the same time.
+                    let log = errors.deletingLastPathComponent().appending(path: "agent-\(UUID()).log")
+                    FileManager.default.createFile(atPath: log.path, contents: nil, attributes: [.posixPermissions: 0o600])
+                    defer { if rename(log.path, errors.path) != 0 { try? FileManager.default.removeItem(at: log) } }
+
                     let process = Process()
-                    process.executableURL = found.claude
-                    process.arguments = Agent.arguments(for: turn)
-                    process.currentDirectoryURL = turn.folder
+                    let codex = turn.provider == .codex ? try CodexInvocation(turn, executable: found.executable) : nil
+                    defer { codex?.cleanUp() }
+                    process.executableURL = codex?.executable ?? found.executable
+                    process.arguments = codex?.arguments ?? Agent.arguments(for: turn)
+                    process.currentDirectoryURL = codex?.directory ?? turn.folder
                     process.environment = ProcessInfo.processInfo.environment.merging(["PATH": found.path]) { $1 }
                     // Nothing to read: without it Claude Code waits three seconds for a prompt on stdin.
-                    process.standardInput = FileHandle.nullDevice
+                    process.standardInput = try codex.map { try FileHandle(forReadingFrom: $0.input) } ?? FileHandle.nullDevice
                     // A file, not a pipe: nobody reads it until the end, and a full pipe would stop Claude Code.
-                    process.standardError = try FileHandle(forWritingTo: errors)
+                    process.standardError = try FileHandle(forWritingTo: log)
                     let output = Pipe()
                     process.standardOutput = output
                     let (exited, exit) = AsyncStream<Void>.makeStream()
@@ -410,10 +418,15 @@ package final class AgentProcess: Sendable {
                     try process.run()
 
                     var finished = false
+                    var failure: String?
                     try await withTaskCancellationHandler {
                         for try await line in output.fileHandleForReading.bytes.lines {
-                            for event in AgentStream.events(from: line) {
-                                if case .done = event { finished = true }
+                            for event in codex?.events(from: line) ?? AgentStream.events(from: line) {
+                                if case .done(let error) = event {
+                                    finished = true
+                                    failure = error
+                                    if codex != nil { continue }
+                                }
                                 continuation.yield(event)
                             }
                         }
@@ -421,9 +434,15 @@ package final class AgentProcess: Sendable {
                         process.terminate()
                     }
                     for await _ in exited {}
-                    if !finished, !Task.isCancelled {
-                        let said = (try? String(contentsOf: errors, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        throw YokanError(said.isEmpty ? "Claude Code stopped before it answered" : Agent.explain(String(said.suffix(300))))
+                    if Task.isCancelled { return continuation.finish() }
+                    if codex != nil, let failure { throw YokanError(failure) }
+                    if !finished || (codex != nil && process.terminationStatus != 0) {
+                        let said = (try? String(contentsOf: log, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                        throw YokanError(said.isEmpty ? "\(turn.provider.name) stopped before it answered" : turn.provider.failure(String(said.suffix(300))))
+                    }
+                    if let codex {
+                        for event in try codex.finish(turn) { continuation.yield(event) }
+                        continuation.yield(.done(error: nil))
                     }
                     continuation.finish()
                 } catch {
@@ -434,12 +453,12 @@ package final class AgentProcess: Sendable {
         }
     }
 
-    /// Claude Code as the user's login shell finds it: an app started from the Dock has none of
+    /// The CLI as the user's login shell finds it: an app started from the Dock has none of
     /// the PATH their terminal has.
-    package static let loginShell: Find = {
+    package static let loginShell: Find = { provider in
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["+m", "-ilc", #"printf '\n%s\n%s\n' "$(whence -p claude)" "$PATH""#]
+        process.arguments = ["+m", "-ilc", #"printf '\n%s\n%s\n' "$(whence -p \#(provider.rawValue))" "$PATH""#]
         process.standardInput = FileHandle.nullDevice
         let output = Pipe()
         process.standardOutput = output
@@ -450,7 +469,7 @@ package final class AgentProcess: Sendable {
         // The last two lines, after whatever .zshrc printed: where it is (empty when it isn't), and PATH.
         let lines = said.split(separator: "\n", omittingEmptySubsequences: false).map(String.init).dropLast()
         guard lines.count >= 2, lines[lines.count - 2].hasPrefix("/") else {
-            throw YokanError("Yokan's apps run on Claude Code, and this Mac doesn't have it: install it from claude.com/claude-code")
+            throw YokanError("Install \(provider.name) and make sure \(provider.rawValue) is on your Terminal PATH, then try again.")
         }
         return (URL(fileURLWithPath: lines[lines.count - 2]), lines[lines.count - 1])
     }

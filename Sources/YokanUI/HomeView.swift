@@ -14,9 +14,19 @@ struct HomeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
-                Text("Yokan").font(Theme.serif(20))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, Theme.lights + 8).padding(.top, 5)
+                HStack {
+                    Text("Yokan").font(Theme.serif(20))
+                    Spacer()
+                    Menu {
+                        ProviderPicker(model: model)
+                    } label: {
+                        Text("Agent · \(model.provider.name)").foregroundStyle(Theme.soft)
+                    }
+                    .accessibilityLabel("Agent: \(model.provider.name)")
+                    .menuStyle(.borderlessButton).fixedSize()
+                }
+                .padding(.trailing, 18)
+                .padding(.leading, Theme.lights + 8).padding(.top, 5)
                 Spacer()
                 VStack(spacing: 18) {
                     Text("Drop a skill.").font(Theme.serif(80)).tracking(-3)
@@ -30,11 +40,11 @@ struct HomeView: View {
                             .font(.system(size: 15)).onSubmit { make(pasted) }
                         Rectangle().fill(targeted ? Theme.accent : Theme.rule).frame(height: 1.5)
                         Button { picking = true } label: {
-                            Text("or choose one Claude Code already has").underline().foregroundStyle(Theme.dim)
+                            Text("or choose one \(model.provider.name) already has").underline().foregroundStyle(Theme.dim)
                         }
                         .buttonStyle(.plain).padding(.top, 4)
                         .popover(isPresented: $picking, arrowEdge: .bottom) {
-                            SkillPicker { picking = false; make($0) }
+                            SkillPicker(provider: model.provider) { picking = false; make($0) }
                         }
                     }
                     .frame(width: 440).padding(.top, 8)
@@ -332,6 +342,7 @@ private struct AllApps: View {
 
 /// The skills Claude Code already has on this Mac: the nearest place to find one.
 private struct SkillPicker: View {
+    let provider: AgentProvider
     let pick: (String) -> Void
     @State private var skills: [Skill] = []
 
@@ -350,10 +361,23 @@ private struct SkillPicker: View {
                     .buttonStyle(.plain)
                     Divider()
                 }
-                if skills.isEmpty { Text("Claude Code has no skills here yet.").foregroundStyle(.secondary).padding(20) }
+                if skills.isEmpty { Text("\(provider.name) has no skills here yet.").foregroundStyle(.secondary).padding(20) }
             }
         }
         .frame(width: 380, height: 340)
-        .task { skills = Skill.installed() }
+        .task(id: provider) { skills = Skill.installed(for: provider) }
+    }
+}
+
+struct ProviderPicker: View {
+    let model: AppModel
+
+    var body: some View {
+        Picker("Agent", selection: Binding(get: { model.provider }, set: { model.selectProvider($0) })) {
+            ForEach(AgentProvider.allCases, id: \.self) { provider in
+                Text(provider.name).tag(provider)
+            }
+        }
+        .pickerStyle(.inline)
     }
 }
