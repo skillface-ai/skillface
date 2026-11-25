@@ -19,7 +19,7 @@ is on screen, kept in memory, and tomorrow's session starts from where today's s
    time, with the likely answers as buttons. Given a repository, it first reads all of it and
    works out the workflow its skills make: which starts, what each hands to the next.
 3. **Draw.** It works out what kind of tool the skill is (a study tool, a review desk, a planner,
-   a console…) and draws three versions for that job. You see them live, side by side, on sample
+   a console…) and draws three versions for that job, at once. You see them live, side by side, on sample
    data, and take one.
 4. **Shape.** Say what to change in the one you chose until it's right, then ship it.
 5. **Ship.** It writes what the running app needs (which memory to keep, and how) and checks

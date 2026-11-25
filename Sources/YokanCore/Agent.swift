@@ -75,9 +75,10 @@ package enum Agent {
 
     package static func arguments(for turn: AgentTurn) -> [String] {
         let build = turn.session.kind == .build
-        // An app's agent may hand work to subagents, as skills often say to. They are held to the
-        // same tools, the same folders and the same sandbox, so they add nothing it couldn't do.
-        let tools = ["Read", "Write", "Edit", "Glob", "Grep"] + (build ? ["Skill"] : ["Agent"]) + (turn.runs ? ["Bash"] : [])
+        // An app's agent may hand work to subagents, as skills often say to, and the builder draws
+        // its versions with them, at once. They are held to the same tools, the same folders and
+        // the same sandbox, so they add nothing it couldn't do.
+        let tools = ["Read", "Write", "Edit", "Glob", "Grep", "Agent"] + (build ? ["Skill"] : []) + (turn.runs ? ["Bash"] : [])
         let session = turn.session.started ? ["--resume", turn.session.id] : ["--session-id", turn.session.id]
         // An app made from a repository reads its skills there as it needs them. The builder
         // is already in the folder that holds it. Claude Code would let it write there too:
@@ -266,7 +267,11 @@ package enum AgentStream {
     package static func events(from line: String) -> [AgentEvent] {
         guard let event = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { return [] }
         let content = (event["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
+        // A subagent talks to the agent that started it, not to the user: only what it's doing shows.
+        let helper = event["parent_tool_use_id"] is String
         switch event["type"] as? String {
+        case "stream_event" where helper:
+            return []
         case "stream_event":
             let delta = (event["event"] as? [String: Any])?["delta"] as? [String: Any]
             guard delta?["type"] as? String == "text_delta", let text = delta?["text"] as? String else { return [] }
@@ -277,7 +282,7 @@ package enum AgentStream {
             if (event["message"] as? [String: Any])?["model"] as? String == "<synthetic>" { return [] }
             return content.compactMap { block in
                 switch block["type"] as? String {
-                case "text": (block["text"] as? String).map(AgentEvent.said)
+                case "text": helper ? nil : (block["text"] as? String).map(AgentEvent.said)
                 case "tool_use": .doing(describe(block["name"] as? String ?? "", block["input"] as? [String: Any] ?? [:]))
                 default: nil
                 }

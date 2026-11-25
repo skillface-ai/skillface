@@ -316,7 +316,8 @@ struct AgentTests {
         let turn = try turn(.build)
         let arguments = Agent.arguments(for: turn)
         #expect(turn.folder == turn.app.folder)
-        #expect(arguments[arguments.firstIndex(of: "--tools")! + 1].hasSuffix(",Skill"))
+        // It draws its versions with helpers, at once. They get no more than it has.
+        #expect(arguments[arguments.firstIndex(of: "--tools")! + 1] == "Read,Write,Edit,Glob,Grep,Agent,Skill")
         #expect(arguments[arguments.firstIndex(of: "--plugin-dir")! + 1] == turn.plugin.path)
         try BuilderSkills.write(to: turn.plugin)
         let told = arguments[arguments.firstIndex(of: "--append-system-prompt")! + 1]
@@ -350,6 +351,12 @@ struct AgentTests {
         #expect(AgentStream.events(from: #"{"type":"result","is_error":true,"result":"Out of credit"}"#) == [.done(error: "Out of credit")])
         #expect(AgentStream.events(from: #"{"type":"result","is_error":false,"result":"hi"}"#) == [.done(error: nil)])
         #expect(AgentStream.events(from: "not json").isEmpty)
+        // A helper's words are for the agent that started it. What it's doing still shows.
+        let helper = [
+            #"{"type":"stream_event","parent_tool_use_id":"t1","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}}"#,
+            #"{"type":"assistant","parent_tool_use_id":"t1","message":{"content":[{"type":"text","text":"ok"},{"type":"tool_use","name":"Write","input":{"file_path":"/x/designs/B.html"}}]}}"#,
+        ].flatMap(AgentStream.events)
+        #expect(helper == [.doing("Writing B.html")])
         // A failed sign-in is the turn's error, never something the agent said.
         let failed = [
             #"{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"text","text":"Failed to authenticate: OAuth session expired and could not be refreshed"}]}}"#,

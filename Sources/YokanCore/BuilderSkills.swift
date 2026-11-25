@@ -39,6 +39,7 @@ package enum BuilderSkills {
         ## Read everything
 
         - Glob `source/**` first, so you know all that's there before you open any of it.
+        - Read in batches: many files in one step, never one at a time. The user is waiting.
         - What the author says: the README, any docs, AGENTS.md or CLAUDE.md. What it's for, who uses it, \
         and in what order.
         - Every SKILL.md, whole: its name, when it says to use it, and what it does. Don't stop at the first \
@@ -118,7 +119,7 @@ package enum BuilderSkills {
         A question about a screen is hard to answer in words. So before you ask one, draw what each answer \
         would look like: `sketches/1.html` for the first choice, `sketches/2.html` for the second, and so on, \
         in the order you list the choices. Yokan shows the sketch for whichever answer the user points at, \
-        beside the question, marked as a rough idea. Write them in the same turn, then ask.
+        beside the question, marked as a rough idea. Write them all in one step, then ask.
 
         A sketch is a wireframe, not a design, and takes seconds:
 
@@ -184,8 +185,16 @@ package enum BuilderSkills {
 
         ## Then, draw three versions
 
-        Load yokan:interface. Then write three whole interfaces, each a real answer to "what should this \
-        be", not one design in three colours:
+        Three whole interfaces, each a real answer to "what should this be", not one design in three \
+        colours. Drawn one after another they are the longest wait of the build, so draw them at once: \
+        decide what each puts first, then start three helpers with the Agent tool, all in one step, one \
+        for each version. A helper knows nothing of this conversation, so its brief is complete: to load \
+        yokan:interface with the Skill tool and read demo.json before anything, what kind of tool this is \
+        and its character, what the user does in it and what they asked for, the memory files and their \
+        shapes, what the buttons send, this version's name and what it puts first, the one file it \
+        writes, and to answer in one line. While they draw, write `designs/index.json` and app.json. \
+        When they are back, check that each file is there and whole; draw any that is missing yourself. \
+        With no tool for starting helpers, load yokan:interface and draw the three yourself.
 
         - `designs/A.html`, `designs/B.html`, `designs/C.html`, each complete and self-contained.
         - `designs/index.json`: `[{"id": "A", "name": "Focus", "idea": "One question fills the screen, the \
