@@ -26,6 +26,7 @@ struct BuilderView: View {
             VStack(spacing: 0) {
                 if let session = model.buildSession {
                     ChatView(
+                        draft: Binding(get: { model.drafts[session.id] ?? "" }, set: { model.drafts[session.id] = $0.isEmpty ? nil : $0 }),
                         messages: model.messages(of: session), busy: busy,
                         status: model.live[session.id]?.status ?? "",
                         send: { model.send($0, in: session.id) }, stop: { model.stop(session.id) },
@@ -113,6 +114,7 @@ private struct Thumbnail: View {
 
 /// A conversation, drawn natively: the builder's. An app's own conversations are its interface's.
 struct ChatView: View {
+    @Binding var draft: String
     let messages: [Session.Message]
     let busy: Bool
     let status: String
@@ -124,7 +126,6 @@ struct ChatView: View {
     var pointed: Int?
     var point: (Int) -> Void = { _ in }
 
-    @State private var draft = ""
     @FocusState private var focused: Bool
 
     /// What the last question offers, until it's answered.
@@ -176,6 +177,20 @@ struct ChatView: View {
                     TextField(choices.isEmpty ? "Message" : "Or say something else", text: $draft, axis: .vertical)
                         .textFieldStyle(.plain).lineLimit(1...6).focused($focused)
                         .onSubmit(submit)
+                        // A vertical field sends on Shift-Return too; it should break the line,
+                        // at the cursor, which is the field editor's own "newline, don't submit".
+                        .onKeyPress(.return, phases: .down) { press in
+                            guard press.modifiers.contains(.shift) else { return .ignored }
+                            NSApp.sendAction(#selector(NSTextView.insertNewlineIgnoringFieldEditor(_:)), to: nil, from: nil)
+                            return .handled
+                        }
+                        // Control-W is the terminal's "delete the word before"; a Mac field has no
+                        // such binding. With Control held the character arrives as ETB (0x17).
+                        .onKeyPress(phases: [.down, .repeat]) { press in
+                            guard press.modifiers.contains(.control), press.key == "w" || press.characters == "\u{17}" else { return .ignored }
+                            NSApp.sendAction(#selector(NSTextView.deleteWordBackward(_:)), to: nil, from: nil)
+                            return .handled
+                        }
                     if busy {
                         Button("Stop", systemImage: "stop.circle.fill", action: stop)
                             .labelStyle(.iconOnly).buttonStyle(.plain).font(.title2).foregroundStyle(.secondary)

@@ -46,6 +46,8 @@ package final class AppModel {
     /// A rough picture of each answer to the builder's question, and the answer being pointed at.
     package private(set) var sketches: [String] = []
     package var sketched = 0
+    /// What's typed and not yet sent, by session: it outlives the view, which goes when the app is shown.
+    package var drafts: [String: String] = [:]
     package private(set) var skill = ""
     /// The skills of an app made from a repository of them. Then `skill` is empty.
     package private(set) var skills: [SourceSkill] = []
