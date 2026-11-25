@@ -82,10 +82,15 @@ package struct Skill: Equatable, Sendable {
     ]
 
     package static func installed(for provider: AgentProvider) -> [Skill] {
-        guard provider == .codex else { return installed() }
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let codex = URL(fileURLWithPath: (Agent.codexHome as NSString).expandingTildeInPath)
-        let skills = installed(in: home.appending(path: ".agents/skills")) + installed(in: codex.appending(path: "skills"))
+        // The folder every one of them but Claude Code reads, then its own.
+        let own: String
+        switch provider {
+        case .claude: return installed()
+        case .codex: own = Agent.codexHome
+        case .antigravity: own = "~/.gemini"
+        case .grok: own = Agent.grokHome
+        }
+        let skills = ["~/.agents", own].flatMap { installed(in: URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath).appending(path: "skills")) }
         var names = Set<String>()
         return skills.filter { names.insert($0.name).inserted }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

@@ -31,7 +31,7 @@ package struct AgentTurn: Sendable {
     package var folder: URL { session.kind == .build ? app.folder : app.memory }
 
     /// Whether this turn gets a shell: an app in use, whose user said so.
-    package var runs: Bool { terminal && session.kind == .use }
+    package var runs: Bool { terminal && session.kind == .use && provider.sandboxes }
 }
 
 /// What Claude Code is asked and told. The user's own Claude Code, contained as Yongkang
@@ -105,7 +105,7 @@ package enum Agent {
     /// What the user's secrets are kept in, which no command may read.
     /// ponytail: a short list of the usual places. A command can read the rest of the disk, and
     /// with only `registries` to reach has nowhere to send it. Deny reading the home folder if that isn't enough.
-    static let secrets = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gh", "~/.netrc", "~/Library/Keychains", codexHome]
+    static let secrets = ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gh", "~/.netrc", "~/Library/Keychains", codexHome, grokHome, "~/.gemini"]
 
     /// Where a CLI keeps its sign-in. The user's environment can move it, and what's denied has to
     /// follow: denying only the usual place would leave the real one readable.
@@ -113,6 +113,7 @@ package enum Agent {
         environment[variable].flatMap { $0.isEmpty ? nil : $0 } ?? usual
     }
     static let codexHome = folder("CODEX_HOME", or: "~/.codex")
+    static let grokHome = folder("GROK_HOME", or: "~/.grok")
     /// Not in `secrets`: Claude Code's own shell reads from here, and its sign-in is in the keychain.
     static let claudeHome = folder("CLAUDE_CONFIG_DIR", or: "~/.claude")
 
@@ -140,6 +141,14 @@ package enum Agent {
 
     /// What an app's agent is told about running things.
     private static func commands(for turn: AgentTurn) -> String {
+        guard turn.provider.sandboxes else {
+            return """
+                You can't run commands or go to the web, and \(turn.provider.name) can't be let to: don't end a \
+                message with \(asks). When a skill needs a command run, do the thinking yourself, say exactly \
+                what the user has to run, and say once that choosing Claude Code or Codex as the Agent lets \
+                this app run it itself.
+                """
+        }
         guard turn.runs else {
             return """
                 You can't run commands yet, or go to the web. When a skill needs a command run, don't tell the \
@@ -384,6 +393,21 @@ package struct Reply: Equatable, Sendable {
     }
 }
 
+/// A CLI that isn't Claude Code, started in a folder of its own that it answers into.
+protocol Invocation {
+    var executable: URL { get }
+    var directory: URL { get }
+    var arguments: [String] { get }
+    var stdin: URL? { get }
+    func events(from line: String) -> [AgentEvent]
+    func finish(_ turn: AgentTurn) throws -> [AgentEvent]
+}
+
+extension Invocation {
+    var answer: URL { directory.appending(path: "answer") }
+    func cleanUp() { try? FileManager.default.removeItem(at: directory) }
+}
+
 /// Runs the selected CLI and translates its output into events for the open session.
 package final class AgentProcess: Sendable {
     /// Where the selected CLI is, and the PATH it runs with.
@@ -415,14 +439,18 @@ package final class AgentProcess: Sendable {
                     defer { if rename(log.path, errors.path) != 0 { try? FileManager.default.removeItem(at: log) } }
 
                     let process = Process()
-                    let codex = turn.provider == .codex ? try CodexInvocation(turn, executable: found.executable) : nil
+                    let codex: (any Invocation)? = switch turn.provider {
+                    case .claude: nil
+                    case .codex: try CodexInvocation(turn, executable: found.executable)
+                    case .antigravity, .grok: try ToollessInvocation(turn, executable: found.executable)
+                    }
                     defer { codex?.cleanUp() }
                     process.executableURL = codex?.executable ?? found.executable
                     process.arguments = codex?.arguments ?? Agent.arguments(for: turn)
                     process.currentDirectoryURL = codex?.directory ?? turn.folder
                     process.environment = ProcessInfo.processInfo.environment.merging(["PATH": found.path]) { $1 }
                     // Nothing to read: without it Claude Code waits three seconds for a prompt on stdin.
-                    process.standardInput = try codex.map { try FileHandle(forReadingFrom: $0.input) } ?? FileHandle.nullDevice
+                    process.standardInput = try codex?.stdin.map { try FileHandle(forReadingFrom: $0) } ?? FileHandle.nullDevice
                     // A file, not a pipe: nobody reads it until the end, and a full pipe would stop Claude Code.
                     process.standardError = try FileHandle(forWritingTo: log)
                     let output = Pipe()

@@ -376,7 +376,7 @@ extension YokanHome {
             guard parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && !$0.contains("\0") }),
                   !build || Self.builderFiles.contains(file.path) || inDesigns,
                   Self.hasNoLink(from: turn.app.folder, parts: (build ? [] : ["memory"]) + parts) else {
-                throw YokanError("Codex requested a file outside this turn’s writable files: \(file.path)")
+                throw YokanError("\(turn.provider.name) requested a file outside this turn’s writable files: \(file.path)")
             }
         }
         // Publish stage changes only after every file for that stage is in place.

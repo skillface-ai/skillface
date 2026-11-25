@@ -17,6 +17,7 @@ to come back to. README.md has the product and the flow. Its architecture follow
   - `Agent.swift`: `AgentTurn`, Claude Code's flags and what it's told (`Agent`), its stream
     (`AgentStream`, `AgentEvent`, `Reply`), and running it (`AgentProcess`).
   - `Codex.swift`: the provider choice, conversation handoff, and restricted Codex CLI invocation.
+  - `Toolless.swift`: Antigravity and Grok, run with every tool denied (`ToollessInvocation`).
   - `BuilderSkills.swift`: the builder's six skills, written out as a Claude Code plugin.
   - `Interface.swift`: what an `interface.html` is given: `bridge` (`window.yokan`), `css`,
     `policy`, the starter page, and the `State` it's handed.
@@ -53,7 +54,8 @@ make run      # open the app
   writes. Then its own agent, never the builder, gets Bash under `Agent.sandbox(for:)`: no network but PyPI (`Agent.registries`),
   no way out of the sandbox, writing only `memory/` and `work/`. Codex uses a named permission profile
   for these same folders and registries. Without terminal permission it returns structured file changes
-  for Yokan to validate, with the shell disabled. Don't allow Bash any other way
+  for Yokan to validate, with the shell disabled. Antigravity and Grok have no sandbox that holds to
+  those (`AgentProvider.sandboxes`), so they only ever return file changes, with every tool denied. Don't allow Bash any other way
   (`--allowedTools`, a permission mode): without the sandbox it must stay denied. What the sandbox
   can't do (Homebrew, an installer) the agent asks for (`Command`), and Yokan runs it itself,
   unsandboxed, only after the user read that exact command and said yes, each time.

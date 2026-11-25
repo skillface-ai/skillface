@@ -462,12 +462,40 @@ struct InterfaceTests {
 struct ProviderTests {
     let home = temporaryHome()
 
-    private func turn(_ kind: Session.Kind, terminal: Bool = false) throws -> AgentTurn {
+    private func turn(_ kind: Session.Kind, terminal: Bool = false, provider: AgentProvider = .codex) throws -> AgentTurn {
         let app = try home.create(Skill(text: tutor))
         let session = Session(kind: kind, messages: [.init(role: .user, text: "First question"),
                                                     .init(role: .assistant, text: "First reply", provider: .codex)])
         return AgentTurn(app: app, session: session, message: "Next question", memory: [], skill: tutor,
-                         terminal: terminal, rules: "", plugin: home.plugin, provider: .codex)
+                         terminal: terminal, rules: "", plugin: home.plugin, provider: provider)
+    }
+
+    /// Neither has a sandbox Yokan can hold, so the user's say-so gets them no shell: only a
+    /// message and files, which Yokan checks as it does Codex's.
+    @Test(arguments: [
+        (AgentProvider.antigravity, #"{"event":"result","result":{"status":"SUCCESS","structured_output":ANSWER}}"#),
+        (.grok, #"{"type":"result","is_error":false,"structured_output":ANSWER}"#),
+    ])
+    func anAgentWithNoSandboxGetsNoToolsAndReturnsItsFiles(provider: AgentProvider, result: String) async throws {
+        let turn = try turn(.use, terminal: true, provider: provider)
+        #expect(!turn.runs && Agent.rules(for: turn).contains("can't be let to"))
+        let request = try ToollessInvocation(turn, executable: URL(fileURLWithPath: "/bin/sh"))
+        defer { request.cleanUp() }
+        let denied = provider == .grok ? request.arguments.joined(separator: " ")
+            : try String(contentsOf: request.directory.appending(path: "settings.json"), encoding: .utf8)
+        #expect(denied.contains(provider == .grok ? "--tools  --deny * --permission-mode dontAsk" : #""deny":["command(*)","write_file(*)","read_file(*)""#))
+        #expect(request.events(from: #"{"type":"result","is_error":true,"errors":["Not signed in."]}"#)
+            == [.done(error: "\(provider.name) needs you to sign in. Run \(provider == .grok ? "grok login" : "agy") in Terminal, then try again.")])
+
+        let script = home.root.appending(path: provider.rawValue)
+        let answer = #"{"message":"Saved.","files":[{"path":"notes/today.md","text":"Practice"}]}"#
+        try Data("#!/bin/sh\necho '{\"step\":1}'\necho '\(result.replacingOccurrences(of: "ANSWER", with: answer))'\n".utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let agent = AgentProcess(errors: home.errors) { _ in (script, "/usr/bin:/bin") }
+        var events = [AgentEvent]()
+        for try await event in agent.events(for: turn) { events.append(event) }
+        #expect(events == [.doing("Thinking"), .touched, .said("Saved."), .done(error: nil)])
+        #expect(home.text(at: turn.app.memory.appending(path: "notes/today.md")) == "Practice")
     }
 
     @Test func onlyTheInstalledAgentsAreFound() {

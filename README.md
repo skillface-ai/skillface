@@ -51,9 +51,9 @@ An app is a folder in `~/Library/Application Support/Yokan/Apps/`:
 | `work/` | Where its commands run and what they make, if you let it run any |
 | `sessions/` | Every conversation, one JSON file each |
 
-Choose **Claude Code** or **Codex** from the **Agent** picker on Home or in an open app’s **•••** menu.
-Yokan looks for both at launch and offers the ones this Mac has; if the one you chose is gone, it
-uses the other. The choice is saved for all apps and takes effect on the next message, including in the builder.
+Choose **Claude Code**, **Codex**, **Antigravity** or **Grok** from the **Agent** picker on Home or in an open app’s **•••** menu.
+Yokan looks for each (`claude`, `codex`, `agy`, `grok`) at launch and offers the ones this Mac has; if the one you chose is gone, it
+uses the first it found. The choice is saved for all apps and takes effect on the next message, including in the builder.
 Install and sign in to the selected CLI in Terminal first. Codex requires a CLI with named
 permission profiles and `exec --ignore-user-config` support (developed with 0.171.0).
 
@@ -61,6 +61,9 @@ Claude Code resumes its native session. Codex receives Yokan’s saved conversat
 app files each turn. Switching back to Claude includes the exchange it missed. The builder
 uses the same six skills with either CLI. Without terminal access, Codex returns its reply
 and proposed file changes together. Yokan saves builder files or session memory as appropriate.
+Antigravity and Grok always work that way, with every tool denied: neither has a sandbox Yokan
+can hold to PyPI and an app’s folders, so an app run by one never runs commands, even with
+**Use the Terminal** on. Antigravity keeps its web search, which it has no rule to deny.
 
 A skill that runs scripts needs a shell. An app gets one only when you turn on **Use the
 Terminal** in its ••• menu, and then inside the selected agent’s sandbox: no network but PyPI, for the Python packages a skill needs, and it can write
