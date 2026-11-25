@@ -68,6 +68,19 @@ package struct Skill: Equatable, Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// What home offers someone who doesn't know which skill to use: a skill, and a repository of
+    /// them. Fetched when chosen, like any pasted link, so each is whatever its repository holds then.
+    package struct Sample: Identifiable, Sendable {
+        package let name: String
+        package let link: String
+        package var id: String { link }
+    }
+
+    package static let samples = [
+        Sample(name: "Socratic tutor", link: "https://github.com/janestreet/agent_skills/blob/master/socratic-tutor/SKILL.md"),
+        Sample(name: "Manim videos", link: "https://github.com/adithya-s-k/manim_skill"),
+    ]
+
     package static func installed(for provider: AgentProvider) -> [Skill] {
         guard provider == .codex else { return installed() }
         let home = FileManager.default.homeDirectoryForCurrentUser

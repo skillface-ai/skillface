@@ -14,19 +14,23 @@ struct HomeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                // The same bar an open app has, so the agent sits where its menu does there.
                 HStack {
-                    Text("Yokan").font(Theme.serif(20))
                     Spacer()
                     Menu {
                         ProviderPicker(model: model)
                     } label: {
-                        Text("Agent · \(model.provider.name)").foregroundStyle(Theme.soft)
+                        HStack(spacing: 7) {
+                            Text("Agent").foregroundStyle(Theme.dim)
+                            Text(model.provider.name)
+                            Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.dim)
+                        }
+                        .pill()
                     }
                     .accessibilityLabel("Agent: \(model.provider.name)")
-                    .menuStyle(.borderlessButton).fixedSize()
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 }
-                .padding(.trailing, 18)
-                .padding(.leading, Theme.lights + 8).padding(.top, 5)
+                .padding(.leading, Theme.lights + 8).padding(.trailing, 18).frame(height: 52)
                 Spacer()
                 VStack(spacing: 18) {
                     Text("Drop a skill.").font(Theme.serif(80)).tracking(-3)
@@ -39,13 +43,32 @@ struct HomeView: View {
                             .textFieldStyle(.plain).lineLimit(1...3).multilineTextAlignment(.center)
                             .font(.system(size: 15)).onSubmit { make(pasted) }
                         Rectangle().fill(targeted ? Theme.accent : Theme.rule).frame(height: 1.5)
-                        Button { picking = true } label: {
-                            Text("or choose one \(model.provider.name) already has").underline().foregroundStyle(Theme.dim)
+                        // One row: the agent's own skills are a list to open, outlined; past the
+                        // line, samples from GitHub for someone with no skill in mind, filled.
+                        HStack(spacing: 8) {
+                            Button { picking = true } label: {
+                                HStack(spacing: 7) {
+                                    Text("\(model.provider.name)'s skills")
+                                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.dim)
+                                }
+                                .pill(on: picking)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Choose a skill \(model.provider.name) already has on this Mac")
+                            .popover(isPresented: $picking, arrowEdge: .bottom) {
+                                SkillPicker(provider: model.provider) { picking = false; make($0) }
+                            }
+                            Rectangle().fill(Theme.line).frame(width: 1, height: 18).padding(.horizontal, 4)
+                            ForEach(Skill.samples) { sample in
+                                Button { make(sample.link) } label: {
+                                    Text(sample.name).font(.system(size: 13)).foregroundStyle(Theme.soft)
+                                        .padding(.horizontal, 14).frame(height: 32)
+                                        .background(Theme.raised, in: Capsule()).contentShape(Capsule())
+                                }
+                                .buttonStyle(.plain).help("A sample: makes an app from \(sample.link)")
+                            }
                         }
-                        .buttonStyle(.plain).padding(.top, 4)
-                        .popover(isPresented: $picking, arrowEdge: .bottom) {
-                            SkillPicker(provider: model.provider) { picking = false; make($0) }
-                        }
+                        .fixedSize().padding(.top, 12)
                     }
                     .frame(width: 440).padding(.top, 8)
                     ProgressView().controlSize(.small).opacity(working ? 1 : 0)
