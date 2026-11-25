@@ -1,0 +1,3 @@
+import SkillfaceUI
+
+SkillfaceApp.main()

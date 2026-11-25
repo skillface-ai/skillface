@@ -1,20 +1,20 @@
 import Foundation
 import Testing
 
-@testable import YokanCore
+@testable import SkillfaceCore
 
 /// The whole flow with the real Claude Code, on the user's plan, so only when asked for:
-/// `YOKAN_LIVE=<folder> YOKAN_SKILL=<SKILL.md> swift test --filter Live`. It builds the skill
+/// `SKILLFACE_LIVE=<folder> SKILLFACE_SKILL=<SKILL.md> swift test --filter Live`. It builds the skill
 /// into an app in that folder, answering each question with its first choice and picking the
 /// second of the versions drawn, then uses it in
 /// two sessions, and prints what was said. What it proves is that the second session starts
-/// from what the first one learned. With `YOKAN_REPO=<link>` too it builds that repository into
+/// from what the first one learned. With `SKILLFACE_REPO=<link>` too it builds that repository into
 /// an app instead, and then lets it run commands and rehearse: what that proves is that a
 /// skill that runs things works before anyone uses it.
 struct LiveTests {
-    private static let folder = ProcessInfo.processInfo.environment["YOKAN_LIVE"]
+    private static let folder = ProcessInfo.processInfo.environment["SKILLFACE_LIVE"]
 
-    private func say(_ message: String, in id: String, of app: SkillApp, home: YokanHome, agent: AgentProcess) async throws -> String {
+    private func say(_ message: String, in id: String, of app: SkillApp, home: SkillfaceHome, agent: AgentProcess) async throws -> String {
         let app = try #require(home.apps().first { $0.id == app.id })
         let session = try #require(home.sessions(of: app).first { $0.id == id })
         let turn = AgentTurn(
@@ -32,13 +32,13 @@ struct LiveTests {
         return reply.text
     }
 
-    /// A real repository, fetched and made into an app's folder: `YOKAN_REPO=<link> swift test
+    /// A real repository, fetched and made into an app's folder: `SKILLFACE_REPO=<link> swift test
     /// --filter Live`. It asks GitHub, and nothing of Claude Code.
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["YOKAN_REPO"] != nil))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SKILLFACE_REPO"] != nil))
     func aRepositoryOnGitHubBecomesAnAppsSource() async throws {
-        let repo = try #require(Repo(ProcessInfo.processInfo.environment["YOKAN_REPO"] ?? ""))
-        let work = FileManager.default.temporaryDirectory.appending(path: "yokan-live-\(UUID().uuidString)")
-        let home = YokanHome(root: work.appending(path: "home"))
+        let repo = try #require(Repo(ProcessInfo.processInfo.environment["SKILLFACE_REPO"] ?? ""))
+        let work = FileManager.default.temporaryDirectory.appending(path: "skillface-live-\(UUID().uuidString)")
+        let home = SkillfaceHome(root: work.appending(path: "home"))
         let app = try home.create(from: try await repo.download(into: work.appending(path: "repo")), named: repo.title)
         let skills = home.skills(of: app)
         print("\n\(app.info.name): \(skills.count) skills in \(app.source.path)\n\(skills.map { "  \($0.path): \($0.skill.name)" }.joined(separator: "\n"))")
@@ -47,13 +47,13 @@ struct LiveTests {
 
     @Test(.enabled(if: folder != nil), .timeLimit(.minutes(90)))
     func aSkillBecomesAnAppThatRemembers() async throws {
-        let home = YokanHome(root: URL(fileURLWithPath: try #require(Self.folder)))
+        let home = SkillfaceHome(root: URL(fileURLWithPath: try #require(Self.folder)))
         let agent = AgentProcess(errors: home.errors)
         try BuilderSkills.write(to: home.plugin)
-        let repo = Repo(ProcessInfo.processInfo.environment["YOKAN_REPO"] ?? "")
-        let skill = try repo == nil ? String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["YOKAN_SKILL"]), encoding: .utf8) : ""
+        let repo = Repo(ProcessInfo.processInfo.environment["SKILLFACE_REPO"] ?? "")
+        let skill = try repo == nil ? String(contentsOfFile: try #require(ProcessInfo.processInfo.environment["SKILLFACE_SKILL"]), encoding: .utf8) : ""
         let app = if let repo {
-            try home.create(from: try await repo.download(into: FileManager.default.temporaryDirectory.appending(path: "yokan-live-\(UUID().uuidString)")), named: repo.title)
+            try home.create(from: try await repo.download(into: FileManager.default.temporaryDirectory.appending(path: "skillface-live-\(UUID().uuidString)")), named: repo.title)
         } else {
             try home.create(Skill(text: skill))
         }

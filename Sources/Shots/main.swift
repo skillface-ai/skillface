@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 import WebKit
-import YokanCore
-import YokanUI
+import SkillfaceCore
+import SkillfaceUI
 
 // Dev-only: `swift run shots <dir>`. Draws every screen offscreen on a throwaway home with
 // sample data, so a change to the UI can be looked at without an agent or anyone's real apps.
@@ -32,7 +32,7 @@ MainActor.assumeIsolated {
         try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
         // `swift run shots <dir> <home>`: a real home's first app instead, as it stands.
         if let real = CommandLine.arguments.dropFirst(2).first {
-            let model = AppModel(home: YokanHome(root: URL(fileURLWithPath: real)))
+            let model = AppModel(home: SkillfaceHome(root: URL(fileURLWithPath: real)))
             draw(model, "home", into: out)
             model.selected = model.recent.first?.id
             draw(model, "app", into: out)
@@ -43,7 +43,7 @@ MainActor.assumeIsolated {
             }
             return
         }
-        let home = YokanHome(root: FileManager.default.temporaryDirectory.appending(path: "yokan-shots-\(UUID().uuidString)"))
+        let home = SkillfaceHome(root: FileManager.default.temporaryDirectory.appending(path: "skillface-shots-\(UUID().uuidString)"))
         draw(AppModel(home: home), "1-home-empty", into: out)
 
         // A skill just added: the builder is asking its first question.
@@ -114,7 +114,7 @@ MainActor.assumeIsolated {
     }
 
     /// The model as it is with that app open.
-    static func open(_ app: SkillApp, in home: YokanHome) -> AppModel {
+    static func open(_ app: SkillApp, in home: SkillfaceHome) -> AppModel {
         let model = AppModel(home: home)
         model.selected = app.id
         return model

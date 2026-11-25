@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import YokanCore
+import SkillfaceCore
 
 /// One app, open: being built, or in use, where its sessions run along the top as one
 /// lifeline and what it remembers opens beside it.

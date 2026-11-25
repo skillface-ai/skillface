@@ -1,10 +1,10 @@
 import Foundation
 import Testing
 
-@testable import YokanCore
+@testable import SkillfaceCore
 
-private func temporaryHome() -> YokanHome {
-    YokanHome(root: FileManager.default.temporaryDirectory.appending(path: "yokan-tests-\(UUID().uuidString)"))
+private func temporaryHome() -> SkillfaceHome {
+    SkillfaceHome(root: FileManager.default.temporaryDirectory.appending(path: "skillface-tests-\(UUID().uuidString)"))
 }
 
 private let tutor = """
@@ -27,9 +27,9 @@ struct SkillTests {
     }
 
     @Test func refusesWhatIsNotASkill() {
-        #expect(throws: YokanError.self) { try Skill(text: "  \n") }
-        #expect(throws: YokanError.self) { try Skill(text: "just some words") }
-        #expect(throws: YokanError.self) { try Skill(text: "# Big\n" + String(repeating: "x", count: 200_001)) }
+        #expect(throws: SkillfaceError.self) { try Skill(text: "  \n") }
+        #expect(throws: SkillfaceError.self) { try Skill(text: "just some words") }
+        #expect(throws: SkillfaceError.self) { try Skill(text: "# Big\n" + String(repeating: "x", count: 200_001)) }
     }
 
     @Test func aLinkToARepositoryIsAllOfIt() throws {
@@ -49,7 +49,7 @@ struct SkillTests {
     }
 
     @Test func aRepositoryUnpacksWithoutItsOuterFolder() throws {
-        let work = FileManager.default.temporaryDirectory.appending(path: "yokan-tests-\(UUID().uuidString)")
+        let work = FileManager.default.temporaryDirectory.appending(path: "skillface-tests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: work.appending(path: "repo-main/tutor"), withIntermediateDirectories: true)
         try Data(tutor.utf8).write(to: work.appending(path: "repo-main/tutor/SKILL.md"))
         let tar = Process()
@@ -59,9 +59,9 @@ struct SkillTests {
         tar.waitUntilExit()
         try Repo.unpack(work.appending(path: "repo.tar.gz"), into: work.appending(path: "out"))
         #expect(try String(contentsOf: work.appending(path: "out/tutor/SKILL.md"), encoding: .utf8) == tutor)
-        #expect(throws: YokanError.self) { try Repo.unpack(work.appending(path: "repo-main/tutor/SKILL.md"), into: work.appending(path: "bad")) }
+        #expect(throws: SkillfaceError.self) { try Repo.unpack(work.appending(path: "repo-main/tutor/SKILL.md"), into: work.appending(path: "bad")) }
         // One that unpacks to more than it may is stopped.
-        #expect(throws: YokanError.self) { try Repo.unpack(work.appending(path: "repo.tar.gz"), into: work.appending(path: "bomb"), limit: 100) }
+        #expect(throws: SkillfaceError.self) { try Repo.unpack(work.appending(path: "repo.tar.gz"), into: work.appending(path: "bomb"), limit: 100) }
     }
 
     @Test func aNameIsAFolderName() {
@@ -83,21 +83,21 @@ struct SkillTests {
 struct HomeTests {
     @Test func theHomeFromBeforeTheRenameMovesOnce() throws {
         let files = FileManager.default
-        let work = files.temporaryDirectory.appending(path: "yokan-tests-\(UUID().uuidString)")
-        let (old, new) = (work.appending(path: "Yonka"), work.appending(path: "Yokan"))
-        try YokanHome.adopt(old, as: new)
+        let work = files.temporaryDirectory.appending(path: "skillface-tests-\(UUID().uuidString)")
+        let (old, new) = (work.appending(path: "Yokan"), work.appending(path: "Skillface"))
+        try SkillfaceHome.adopt(old, as: new)
         #expect(!files.fileExists(atPath: new.path))
 
-        let app = try YokanHome(root: old).create(Skill(text: tutor))
-        try YokanHome.adopt(old, as: new)
+        let app = try SkillfaceHome(root: old).create(Skill(text: tutor))
+        try SkillfaceHome.adopt(old, as: new)
         #expect(!files.fileExists(atPath: old.path))
-        #expect(YokanHome(root: new).apps().map(\.id) == [app.id])
+        #expect(SkillfaceHome(root: new).apps().map(\.id) == [app.id])
 
         // A new home that's there is never written over.
-        _ = try YokanHome(root: old).create(Skill(text: tutor))
-        try YokanHome.adopt(old, as: new)
+        _ = try SkillfaceHome(root: old).create(Skill(text: tutor))
+        try SkillfaceHome.adopt(old, as: new)
         #expect(files.fileExists(atPath: old.path))
-        #expect(YokanHome(root: new).apps().count == 1)
+        #expect(SkillfaceHome(root: new).apps().count == 1)
     }
 
     @Test func anAppIsAFolderThatStartsReadyToBuild() throws {
@@ -128,7 +128,7 @@ struct HomeTests {
         try home.remember("likes examples", as: "notes/user.md", in: app)
         #expect(home.memory(of: app).map(\.name) == ["notes/user.md", "skill-map.json"])
         for name in ["../SKILL.md", "/etc/hosts", ".hidden", "a//b", ""] {
-            #expect(throws: YokanError.self) { try home.remember("x", as: name, in: app) }
+            #expect(throws: SkillfaceError.self) { try home.remember("x", as: name, in: app) }
         }
         #expect(home.text(at: app.skill).hasPrefix("---"))
     }
@@ -166,14 +166,14 @@ struct HomeTests {
     @Test func appsStayWhereTheUserPutThem() throws {
         let home = temporaryHome()
         let made = try ["Bravo", "Alpha", "Charlie"].map { try home.create(Skill(text: "# \($0)\n\nDo it.")) }
-        #expect(YokanHome.arranged(home.apps(), by: home.arrangement()).map(\.info.name) == ["Alpha", "Bravo", "Charlie"])
+        #expect(SkillfaceHome.arranged(home.apps(), by: home.arrangement()).map(\.info.name) == ["Alpha", "Bravo", "Charlie"])
         let ids = home.apps().map(\.id)
-        #expect(YokanHome.moving(ids[2], to: ids[0], in: ids) == [ids[2], ids[0], ids[1]])
-        #expect(YokanHome.moving(ids[0], to: ids[2], in: ids) == [ids[1], ids[2], ids[0]])
-        #expect(YokanHome.moving("gone", to: ids[0], in: ids) == ids)
+        #expect(SkillfaceHome.moving(ids[2], to: ids[0], in: ids) == [ids[2], ids[0], ids[1]])
+        #expect(SkillfaceHome.moving(ids[0], to: ids[2], in: ids) == [ids[1], ids[2], ids[0]])
+        #expect(SkillfaceHome.moving("gone", to: ids[0], in: ids) == ids)
         // One that's gone is passed over, and one made since comes after.
         try home.arrange([ids[2], "gone", ids[0]])
-        #expect(YokanHome.arranged(home.apps(), by: home.arrangement()).map(\.info.name) == ["Charlie", "Alpha", "Bravo"])
+        #expect(SkillfaceHome.arranged(home.apps(), by: home.arrangement()).map(\.info.name) == ["Charlie", "Alpha", "Bravo"])
 
         // A new name is one line, and the folder is the one it was made with.
         try home.save(made[0].info.named("  Bravo\nTwo  "), of: made[0])
@@ -186,7 +186,7 @@ struct HomeTests {
     @Test func aFolderOfSkillsBecomesOneAppThatOnlyReadsThem() async throws {
         let home = temporaryHome()
         let files = FileManager.default
-        let repo = files.temporaryDirectory.appending(path: "yokan-tests-\(UUID().uuidString)/agent_skills")
+        let repo = files.temporaryDirectory.appending(path: "skillface-tests-\(UUID().uuidString)/agent_skills")
         for folder in ["plan", "review/deep", ".git"] { try files.createDirectory(at: repo.appending(path: folder), withIntermediateDirectories: true) }
         try Data("# Agent skills\n\nPlan, then review.".utf8).write(to: repo.appending(path: "README.md"))
         try Data("---\nname: plan\ndescription: Write the plan.\n---\nPlan it.".utf8).write(to: repo.appending(path: "plan/SKILL.md"))
@@ -195,7 +195,7 @@ struct HomeTests {
         // What a stranger's folder may also hold: something hidden, a way out, something huge.
         try Data("secret".utf8).write(to: repo.appending(path: ".git/config"))
         try files.createSymbolicLink(at: repo.appending(path: "review/hosts"), withDestinationURL: URL(fileURLWithPath: "/etc/hosts"))
-        try Data(count: YokanHome.sourceFileLimit + 1).write(to: repo.appending(path: "big.bin"))
+        try Data(count: SkillfaceHome.sourceFileLimit + 1).write(to: repo.appending(path: "big.bin"))
 
         let app = try home.create(from: repo, named: Skill.title("agent_skills"))
         #expect(app.info.name == "Agent Skills" && app.id == "agent-skills")
@@ -218,7 +218,7 @@ struct HomeTests {
         // The builder is already in the folder that holds them, and starts by reading it all.
         let build = AgentTurn(app: app, session: Session(kind: .build), message: Agent.beginAll, memory: [], skill: "", skills: home.skills(of: app), rules: "", plugin: home.plugin)
         #expect(!Agent.arguments(for: build).contains("--add-dir"))
-        #expect(Agent.builder(for: build).contains("before step 1, load yokan:explore"))
+        #expect(Agent.builder(for: build).contains("before step 1, load skillface:explore"))
 
         // It runs commands only once the user says so, which is kept where no agent can write,
         // and then only its own agent, in the sandbox, with `source/` still nobody's to change.
@@ -263,7 +263,7 @@ struct HomeTests {
         // A folder with no skill in it is no app, and leaves nothing behind.
         try files.removeItem(at: repo.appending(path: "plan"))
         try files.removeItem(at: repo.appending(path: "review"))
-        #expect(throws: YokanError.self) { try home.create(from: repo, named: "Nothing") }
+        #expect(throws: SkillfaceError.self) { try home.create(from: repo, named: "Nothing") }
         #expect(home.apps().map(\.id) == ["agent-skills"])
         // And an app made from one skill has none of this.
         let one = try home.create(Skill(text: tutor))
@@ -292,7 +292,7 @@ struct HomeTests {
         #expect(read[1].title == "Teach me SQL")
         #expect(read[0].title.count == 61)
         #expect(Session(kind: .use).title == "New Session")
-        #expect(throws: YokanError.self) { try home.save(Session(id: "../x", kind: .use), in: app) }
+        #expect(throws: SkillfaceError.self) { try home.save(Session(id: "../x", kind: .use), in: app) }
     }
 }
 
@@ -339,7 +339,7 @@ struct AgentTests {
         try BuilderSkills.write(to: turn.plugin)
         let told = arguments[arguments.firstIndex(of: "--append-system-prompt")! + 1]
         for skill in BuilderSkills.all {
-            #expect(told.contains("yokan:\(skill.name)"))
+            #expect(told.contains("skillface:\(skill.name)"))
             let file = try String(contentsOf: turn.plugin.appending(path: "skills/\(skill.name)/SKILL.md"), encoding: .utf8)
             #expect(file.hasPrefix("---\nname: \(skill.name)\ndescription: "))
             #expect(!skill.description.contains("\n"))
@@ -410,7 +410,7 @@ struct AgentTests {
         try Data("#!/bin/sh\necho 'Disk is full' >&2\nexit 1\n".utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         let agent = AgentProcess(errors: turn.app.folder.appending(path: "errors.log")) { _ in (script, "/usr/bin:/bin") }
-        await #expect(throws: YokanError("Disk is full")) {
+        await #expect(throws: SkillfaceError("Disk is full")) {
             for try await _ in agent.events(for: turn) {}
         }
     }
@@ -424,9 +424,9 @@ struct InterfaceTests {
         #expect(!Interface.starter.contains("http"))
     }
 
-    @Test func aPageBuiltForYonkaStillRuns() {
-        #expect(Interface.bridge.contains("window.yonka = window.yokan"))
-        #expect(!Interface.starter.contains("yonka"))
+    @Test func aPageBuiltUnderAnOldNameStillRuns() {
+        #expect(Interface.bridge.contains("window.yokan = window.yonka = window.skillface"))
+        #expect(!Interface.starter.contains("yonka") && !Interface.starter.contains("yokan"))
     }
 
     @Test func stateIsWhatThePageIsHanded() throws {
@@ -470,8 +470,8 @@ struct ProviderTests {
                          terminal: terminal, rules: "", plugin: home.plugin, provider: provider)
     }
 
-    /// Neither has a sandbox Yokan can hold, so the user's say-so gets them no shell: only a
-    /// message and files, which Yokan checks as it does Codex's.
+    /// Neither has a sandbox Skillface can hold, so the user's say-so gets them no shell: only a
+    /// message and files, which Skillface checks as it does Codex's.
     @Test(arguments: [
         (AgentProvider.antigravity, #"{"event":"result","result":{"status":"SUCCESS","structured_output":ANSWER}}"#),
         (.grok, #"{"type":"result","is_error":false,"structured_output":ANSWER}"#),
@@ -500,7 +500,7 @@ struct ProviderTests {
 
     @Test func onlyTheInstalledAgentsAreFound() {
         let agent = AgentProcess(errors: home.errors) { provider in
-            guard provider == .codex else { throw YokanError("not here") }
+            guard provider == .codex else { throw SkillfaceError("not here") }
             return (URL(fileURLWithPath: "/bin/sh"), "/bin")
         }
         #expect(agent.installed() == [.codex])
@@ -509,7 +509,7 @@ struct ProviderTests {
     @Test func providerPersistsAndFallsBackForExistingHomes() throws {
         #expect(home.provider == .claude)
         try home.selectProvider(.codex)
-        #expect(YokanHome(root: home.root).provider == .codex)
+        #expect(SkillfaceHome(root: home.root).provider == .codex)
         try home.selectProvider(.claude)
         #expect(home.provider == .claude)
     }
@@ -557,7 +557,7 @@ struct ProviderTests {
             #!/bin/sh
             test ! -L "$0" || exit 1
             for arg do
-                case "$arg" in permissions.yokan.filesystem=*) profile=$arg ;; esac
+                case "$arg" in permissions.skillface.filesystem=*) profile=$arg ;; esac
             done
             case "$profile" in *'"'"$0"'"="read"'*) ;; *) exit 2 ;; esac
             case "$profile" in *'/.codex"="deny"'*) ;; *) exit 3 ;; esac
@@ -583,13 +583,13 @@ struct ProviderTests {
         // A repository longer than Codex takes is sent as far as it fits, its skills first.
         try FileManager.default.createDirectory(at: turn.app.source, withIntermediateDirectories: true)
         try Data("skill".utf8).write(to: turn.app.source.appending(path: "SKILL.md"))
-        try Data(String(repeating: "x", count: YokanHome.codexBudget).utf8).write(to: turn.app.source.appending(path: "big.txt"))
-        let sent = YokanHome.codexContext(turn)
-        #expect(sent["source/SKILL.md"] == "skill" && sent["source/big.txt"] == YokanHome.codexLeftOut && sent["interface.html"] == Interface.starter)
+        try Data(String(repeating: "x", count: SkillfaceHome.codexBudget).utf8).write(to: turn.app.source.appending(path: "big.txt"))
+        let sent = SkillfaceHome.codexContext(turn)
+        #expect(sent["source/SKILL.md"] == "skill" && sent["source/big.txt"] == SkillfaceHome.codexLeftOut && sent["interface.html"] == Interface.starter)
         let output = request.directory.appending(path: "answer")
         for path in ["memory/file", "../provider", "source/SKILL.md", "sessions/x.json"] {
             try Data(#"{"message":"Done","files":[{"path":"\#(path)","text":"wrong"}]}"#.utf8).write(to: output)
-            #expect(throws: YokanError.self) { try request.finish(turn) }
+            #expect(throws: SkillfaceError.self) { try request.finish(turn) }
         }
         try Data(#"{"message":"Choose","files":[{"path":"designs/A.html","text":"Design"},{"path":"app.json","text":"{\"stage\":\"design\",\"name\":\"Tutor\"}"}]}"#.utf8).write(to: output)
         _ = try request.finish(turn)
@@ -605,12 +605,12 @@ struct ProviderTests {
         try FileManager.default.createSymbolicLink(at: turn.app.memory.appending(path: "outside"), withDestinationURL: home.root)
         try Data(#"{"message":"Done","files":[{"path":"outside/new/file","text":"wrong"}]}"#.utf8)
             .write(to: request.directory.appending(path: "answer"))
-        #expect(throws: YokanError.self) { try request.finish(turn) }
+        #expect(throws: SkillfaceError.self) { try request.finish(turn) }
         let allowed = try self.turn(.use, terminal: true)
         let invocation = try CodexInvocation(allowed, executable: URL(fileURLWithPath: "/bin/sh"))
         defer { invocation.cleanUp() }
-        #expect(invocation.arguments.contains("default_permissions=\"yokan\""))
-        let filesystem = invocation.arguments.first { $0.hasPrefix("permissions.yokan.filesystem=") } ?? ""
+        #expect(invocation.arguments.contains("default_permissions=\"skillface\""))
+        let filesystem = invocation.arguments.first { $0.hasPrefix("permissions.skillface.filesystem=") } ?? ""
         for url in [allowed.app.memory, allowed.app.work] { #expect(filesystem.contains("\"\(url.path)\"=\"write\"")) }
         #expect(!invocation.arguments.contains("--output-schema"))
     }

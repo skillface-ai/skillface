@@ -51,7 +51,7 @@ extension AgentTurn {
 
     /// The app's files, for an agent with no way to read them, and how to send back the ones it changes.
     func files() throws -> String {
-        "\nHere are the current app files as JSON:\n" + String(decoding: try JSONEncoder().encode(YokanHome.codexContext(self)), as: UTF8.self)
+        "\nHere are the current app files as JSON:\n" + String(decoding: try JSONEncoder().encode(SkillfaceHome.codexContext(self)), as: UTF8.self)
             + "\nReturn your user-facing reply as message and every changed text file in files, with its relative path and complete text. Use an empty array if nothing changed. Paths are relative to " + (session.kind == .build ? "the app folder." : "memory/.")
     }
 
@@ -63,13 +63,13 @@ extension AgentTurn {
     /// Checks and saves the message and files such an agent answered with.
     func save(_ answer: Data) throws -> [AgentEvent] {
         let response = try JSONDecoder().decode(CodexInvocation.Answer.self, from: answer)
-        try YokanHome(root: app.folder.deletingLastPathComponent().deletingLastPathComponent()).apply(response.files, to: self)
+        try SkillfaceHome(root: app.folder.deletingLastPathComponent().deletingLastPathComponent()).apply(response.files, to: self)
         return [.touched, .said(response.message)]
     }
 }
 
 /// Codex runs outside the app folder so imported project settings cannot configure its tools.
-/// Without terminal permission it returns proposed text files for Yokan to validate and save.
+/// Without terminal permission it returns proposed text files for Skillface to validate and save.
 struct CodexInvocation: Invocation {
     let executable: URL
     let directory: URL
@@ -80,9 +80,9 @@ struct CodexInvocation: Invocation {
     init(_ turn: AgentTurn, executable: URL) throws {
         self.executable = executable.resolvingSymlinksInPath()
         guard try self.executable.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
-            throw YokanError("The Codex executable must be a regular file.")
+            throw SkillfaceError("The Codex executable must be a regular file.")
         }
-        directory = FileManager.default.temporaryDirectory.appending(path: "yokan-codex-\(UUID())")
+        directory = FileManager.default.temporaryDirectory.appending(path: "skillface-codex-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         do {
             var args = ["--no-daemon", "-a", "never", "exec", "--ephemeral", "--json", "--skip-git-repo-check",
@@ -99,9 +99,9 @@ struct CodexInvocation: Invocation {
                 }
                 // Codex re-executes itself inside the sandbox, including when its binary lives under ~/.codex.
                 permissions[self.executable.path] = "read"
-                args += ["-c", "default_permissions=\"yokan\"", "-c", "permissions.yokan.filesystem=" + (try Self.table(permissions)),
-                         "-c", "permissions.yokan.network.enabled=true", "-c", "permissions.yokan.network.allow_local_binding=false",
-                         "-c", "permissions.yokan.network.domains=" + (try Self.table(Dictionary(uniqueKeysWithValues: Agent.registries.map { ($0, "allow") })))]
+                args += ["-c", "default_permissions=\"skillface\"", "-c", "permissions.skillface.filesystem=" + (try Self.table(permissions)),
+                         "-c", "permissions.skillface.network.enabled=true", "-c", "permissions.skillface.network.allow_local_binding=false",
+                         "-c", "permissions.skillface.network.domains=" + (try Self.table(Dictionary(uniqueKeysWithValues: Agent.registries.map { ($0, "allow") })))]
                 prompt += "\nMemory is at \(turn.app.memory.path). Use absolute paths. Work in \(turn.app.work.path)."
             } else {
                 args += ["--sandbox", "read-only", "--disable", "shell_tool", "--disable", "unified_exec"]

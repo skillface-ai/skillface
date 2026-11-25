@@ -52,23 +52,23 @@ package struct Repo: Equatable, Sendable {
         let (file, response) = try await URLSession.shared.download(from: archive)
         defer { try? FileManager.default.removeItem(at: file) }
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw YokanError("Couldn't read \(owner)/\(name) from GitHub. Yokan reads public repositories: check the link")
+            throw SkillfaceError("Couldn't read \(owner)/\(name) from GitHub. Skillface reads public repositories: check the link")
         }
         let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        guard size <= Self.limit else { throw YokanError("\(owner)/\(name) is too big to make an app from: over 50 MB") }
+        guard size <= Self.limit else { throw SkillfaceError("\(owner)/\(name) is too big to make an app from: over 50 MB") }
         try Self.unpack(file, into: folder)
         let linked = folder.appending(path: path)
         // A link in the archive could make the path lead anywhere on this Mac: it has to end inside.
         let inside = path.isEmpty || linked.resolvingSymlinksInPath().path.hasPrefix(folder.resolvingSymlinksInPath().path + "/")
         guard inside, (try? linked.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
-            throw YokanError("\(owner)/\(name) has no folder \(path)")
+            throw SkillfaceError("\(owner)/\(name) has no folder \(path)")
         }
         return linked
     }
 
     /// A `.tar.gz` as GitHub makes them, one folder holding everything, unpacked without that
     /// folder. The Mac's own tar leaves out anything that would land outside `folder`; what it
-    /// unpacks is still a stranger's, and `YokanHome.create(from:named:)` takes only plain files.
+    /// unpacks is still a stranger's, and `SkillfaceHome.create(from:named:)` takes only plain files.
     ///
     /// A small download can unpack to something enormous, so no more than `unpacked` bytes are
     /// let out of it: past that the pipe closes and the unpacking fails.
@@ -82,6 +82,6 @@ package struct Repo: Equatable, Sendable {
         (tar.standardInput, tar.standardOutput, tar.standardError) = (FileHandle.nullDevice, FileHandle.nullDevice, FileHandle.nullDevice)
         try tar.run()
         tar.waitUntilExit()
-        guard tar.terminationStatus == 0 else { throw YokanError("Couldn't unpack that repository") }
+        guard tar.terminationStatus == 0 else { throw SkillfaceError("Couldn't unpack that repository") }
     }
 }

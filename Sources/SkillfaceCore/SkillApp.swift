@@ -110,7 +110,7 @@ package struct TextFile: Identifiable, Equatable, Sendable {
 }
 
 /// One conversation with an app, or with the builder about it. Claude Code keeps its own record
-/// under the same id, which is how the next message continues it; this is what Yokan shows.
+/// under the same id, which is how the next message continues it; this is what Skillface shows.
 package struct Session: Codable, Identifiable, Equatable, Sendable {
     package enum Kind: String, Codable, Sendable { case build, use }
     package enum Role: String, Codable, Sendable { case user, assistant }

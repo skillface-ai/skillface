@@ -1,9 +1,9 @@
 import Foundation
 import Observation
-import YokanCore
+import SkillfaceCore
 
 /// Every workflow, and every failure as a `notice`. The disk is the truth: each change is
-/// written through `YokanHome`, then read back with `refresh`, which is also how the screens
+/// written through `SkillfaceHome`, then read back with `refresh`, which is also how the screens
 /// catch up with what an agent wrote.
 @MainActor @Observable
 package final class AppModel {
@@ -16,7 +16,7 @@ package final class AppModel {
         package let status: String
     }
 
-    package let home: YokanHome
+    package let home: SkillfaceHome
     package private(set) var provider: AgentProvider
     /// The agents to choose from: every one until the Mac's been looked over, then those it has.
     package private(set) var installed = AgentProvider.allCases
@@ -75,10 +75,10 @@ package final class AppModel {
     package private(set) var live: [String: Live] = [:]
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
 
-    package init(home given: YokanHome? = nil, agent: AgentProcess? = nil) {
+    package init(home given: SkillfaceHome? = nil, agent: AgentProcess? = nil) {
         // First, for the standard home: anything written would make the new folder, and the old
         // one would never be moved to it.
-        let moved = given == nil ? Result { try YokanHome.adoptFormer() } : .success(())
+        let moved = given == nil ? Result { try SkillfaceHome.adoptFormer() } : .success(())
         let home = given ?? .standard()
         self.provider = home.provider
         self.home = home
@@ -87,7 +87,7 @@ package final class AppModel {
         if case .failure(let error) = moved { notice = error.localizedDescription }
         (apps, arrangement) = (home.apps(), home.arrangement())
         // ponytail: looked for once, at launch. Look again when the app comes forward if
-        // installing a CLI without restarting Yokan matters.
+        // installing a CLI without restarting Skillface matters.
         Task { [weak self, agent = self.agent] in
             let found = await Task.detached { agent.installed() }.value
             self?.found(found)
@@ -110,7 +110,7 @@ package final class AppModel {
         apps.map { ($0, home.lastUsed($0)) }.sorted { $0.1 > $1.1 }.map(\.0)
     }
     /// Every app, in the order the user put them, if they have.
-    package var arranged: [SkillApp] { YokanHome.arranged(apps, by: arrangement) }
+    package var arranged: [SkillApp] { SkillfaceHome.arranged(apps, by: arrangement) }
     package var hasArrangement: Bool { !arrangement.isEmpty }
     package var useSessions: [Session] { sessions.filter { $0.kind == .use } }
     package var session: Session? { useSessions.first { $0.id == sessionID } }
@@ -193,7 +193,7 @@ package final class AppModel {
     package func add(pasted: String) async -> Bool {
         await adding {
             if let repo = Repo(pasted) {
-                let unpacked = FileManager.default.temporaryDirectory.appending(path: "yokan-repo-\(UUID().uuidString)")
+                let unpacked = FileManager.default.temporaryDirectory.appending(path: "skillface-repo-\(UUID().uuidString)")
                 defer { try? FileManager.default.removeItem(at: unpacked) }
                 return try home.create(from: try await repo.download(into: unpacked), named: repo.title)
             }
@@ -231,7 +231,7 @@ package final class AppModel {
     /// One app takes another's place in `shown`, the order they're in on screen, which becomes
     /// the user's arrangement.
     package func move(_ id: String, to target: String, in shown: [SkillApp]) {
-        attempt { try home.arrange(YokanHome.moving(id, to: target, in: shown.map(\.id))) }
+        attempt { try home.arrange(SkillfaceHome.moving(id, to: target, in: shown.map(\.id))) }
         refresh()
     }
 

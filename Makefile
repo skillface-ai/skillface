@@ -4,18 +4,18 @@ check: ## build and test: the definition of done
 	swift build
 	swift test
 
-run: ## open Yokan
-	swift run yokan
+run: ## open Skillface
+	swift run skillface
 
 shots: ## draw every screen offscreen into .build/shots/*.png, on sample data
 	swift run shots .build/shots
 
-APP = .build/app/Yokan.app
+APP = .build/app/Skillface.app
 
-app: ## the release build as .build/app/Yokan.app, signed ad-hoc
-	swift build -c release --product yokan
+app: ## the release build as .build/app/Skillface.app, signed ad-hoc
+	swift build -c release --product skillface
 	rm -rf $(APP) && mkdir -p $(APP)/Contents/MacOS
-	cp .build/release/yokan $(APP)/Contents/MacOS/
+	cp .build/release/skillface $(APP)/Contents/MacOS/
 	cp App/Info.plist $(APP)/Contents/
 	codesign --force --sign - $(APP)
 	@echo "built $(CURDIR)/$(APP)"

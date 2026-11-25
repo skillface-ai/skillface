@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import YokanCore
+import SkillfaceCore
 
 /// Home: the one thing to do, and the apps already made. Dropping a skill anywhere makes an
 /// app; the dock opens one, and All Apps is the dock, risen.

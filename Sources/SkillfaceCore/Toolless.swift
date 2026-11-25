@@ -1,8 +1,8 @@
 import Foundation
 
-/// Antigravity and Grok. Neither has a sandbox Yokan can hold to PyPI and an app's two folders
+/// Antigravity and Grok. Neither has a sandbox Skillface can hold to PyPI and an app's two folders
 /// (`AgentProvider.sandboxes`), so neither gets a shell, the web or a file: every tool is denied,
-/// the app's files go in the prompt, and what comes back is a message and files for Yokan to
+/// the app's files go in the prompt, and what comes back is a message and files for Skillface to
 /// check and save, as Codex's does without the terminal. It runs in an empty folder, so nothing
 /// a skill brought can configure it.
 struct ToollessInvocation: Invocation {
@@ -24,7 +24,7 @@ struct ToollessInvocation: Invocation {
 
     init(_ turn: AgentTurn, executable: URL) throws {
         (self.executable, provider) = (executable, turn.provider)
-        let folder = FileManager.default.temporaryDirectory.appending(path: "yokan-\(turn.provider.rawValue)-\(UUID())")
+        let folder = FileManager.default.temporaryDirectory.appending(path: "skillface-\(turn.provider.rawValue)-\(UUID())")
         directory = folder
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         do {
@@ -40,7 +40,7 @@ struct ToollessInvocation: Invocation {
             } else {
                 // ponytail: Antigravity takes its prompt only as an argument, and macOS takes about a
                 // megabyte of those. An app with more than that to send fails to start: lower
-                // `YokanHome.codexBudget` for it if that's ever met.
+                // `SkillfaceHome.codexBudget` for it if that's ever met.
                 arguments = try ["--print=" + prompt, "--output-format", "stream-json", "--disable-slash-commands",
                                  "--json-schema", file("schema.json", CodexInvocation.schema),
                                  "--settings", file("settings.json", Self.antigravity)]

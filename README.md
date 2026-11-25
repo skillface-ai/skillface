@@ -1,14 +1,14 @@
-# Yokan
+# Skillface
 
 A macOS app that turns a skill into an app.
 
 A skill is a good set of instructions with nowhere to live: every run starts from an empty
-context, prints its state as text, and asks you to paste it back next time. Yokan gives a skill
+context, prints its state as text, and asks you to paste it back next time. Skillface gives a skill
 an interface of its own, a memory that outlives every session, and sessions you can come back to.
 The skill keeps doing the thinking.
 
 Take [Socratic Tutor](https://github.com/janestreet/agent_skills/blob/master/socratic-tutor/SKILL.md).
-As a skill it draws its skill map in ASCII and has a "save state" command. As a Yokan app the map
+As a skill it draws its skill map in ASCII and has a "save state" command. As a Skillface app the map
 is on screen, kept in memory, and tomorrow's session starts from where today's stopped.
 
 ## The flow
@@ -36,7 +36,7 @@ the app was built in, so it knows what's there and why.
 
 ## How it works
 
-An app is a folder in `~/Library/Application Support/Yokan/Apps/`:
+An app is a folder in `~/Library/Application Support/Skillface/Apps/`:
 
 | File | What it is |
 |---|---|
@@ -52,16 +52,16 @@ An app is a folder in `~/Library/Application Support/Yokan/Apps/`:
 | `sessions/` | Every conversation, one JSON file each |
 
 Choose **Claude Code**, **Codex**, **Antigravity** or **Grok** from the **Agent** picker on Home or in an open app’s **•••** menu.
-Yokan looks for each (`claude`, `codex`, `agy`, `grok`) at launch and offers the ones this Mac has; if the one you chose is gone, it
+Skillface looks for each (`claude`, `codex`, `agy`, `grok`) at launch and offers the ones this Mac has; if the one you chose is gone, it
 uses the first it found. The choice is saved for all apps and takes effect on the next message, including in the builder.
 Install and sign in to the selected CLI in Terminal first. Codex requires a CLI with named
 permission profiles and `exec --ignore-user-config` support (developed with 0.171.0).
 
-Claude Code resumes its native session. Codex receives Yokan’s saved conversation and current
+Claude Code resumes its native session. Codex receives Skillface’s saved conversation and current
 app files each turn. Switching back to Claude includes the exchange it missed. The builder
 uses the same six skills with either CLI. Without terminal access, Codex returns its reply
-and proposed file changes together. Yokan saves builder files or session memory as appropriate.
-Antigravity and Grok always work that way, with every tool denied: neither has a sandbox Yokan
+and proposed file changes together. Skillface saves builder files or session memory as appropriate.
+Antigravity and Grok always work that way, with every tool denied: neither has a sandbox Skillface
 can hold to PyPI and an app’s folders, so an app run by one never runs commands, even with
 **Use the Terminal** on. Antigravity keeps its web search, which it has no rule to deny.
 
@@ -71,18 +71,18 @@ only in its `memory/` and `work/`. It can read most other files on your Mac. Pyt
 installs itself, into `work/`; anything else a script needs (Homebrew, LaTeX), it shows you
 the command and runs it on your Mac once you approve it.
 
-The interface is a web page that is handed `window.yokan` (the messages, the memory, `send`) and
+The interface is a web page that is handed `window.skillface` (the messages, the memory, `send`) and
 nothing else. It loads nothing from the network and can't navigate.
 
 ## Commands
 
 ```sh
-make run      # open Yokan
+make run      # open Skillface
 make check    # build + test
 make shots    # .build/shots/*.png, every screen on sample data
-make app      # .build/app/Yokan.app
+make app      # .build/app/Skillface.app
 ```
 
-`$YOKAN_HOME` moves everything Yokan keeps. The live test builds a real app with your Claude Code:
-`YOKAN_LIVE=/tmp/yokan YOKAN_SKILL=path/to/SKILL.md swift test --filter Live`. With
-`YOKAN_REPO=<link>` it fetches a real repository instead, which asks nothing of Claude Code.
+`$SKILLFACE_HOME` moves everything Skillface keeps. The live test builds a real app with your Claude Code:
+`SKILLFACE_LIVE=/tmp/skillface SKILLFACE_SKILL=path/to/SKILL.md swift test --filter Live`. With
+`SKILLFACE_REPO=<link>` it fetches a real repository instead, which asks nothing of Claude Code.

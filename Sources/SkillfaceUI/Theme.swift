@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
-import YokanCore
+import SkillfaceCore
 
-/// Yokan's own look: dark, a serif for what it says, a monospace for small labels, one accent.
+/// Skillface's own look: dark, a serif for what it says, a monospace for small labels, one accent.
 /// An app's page starts from the same (`Interface.css`), so it belongs in the window around it.
 enum Theme {
     static let ink = Color(red: 0.047, green: 0.051, blue: 0.063)

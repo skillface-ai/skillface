@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key>
-	<string>yokan</string>
+	<string>skillface</string>
 	<key>CFBundleIdentifier</key>
-	<string>ai.yongkang.yokan</string>
+	<string>dev.skillface.app</string>
 	<key>CFBundleName</key>
-	<string>Yokan</string>
+	<string>Skillface</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>

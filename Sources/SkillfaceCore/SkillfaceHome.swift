@@ -1,30 +1,35 @@
 import Foundation
 
-/// Where everything lives: `~/Library/Application Support/Yokan`, or `$YOKAN_HOME`. Every read
+/// Where everything lives: `~/Library/Application Support/Skillface`, or `$SKILLFACE_HOME`. Every read
 /// and write of an app's folder is here.
 ///
-/// Yokan was called Yonka, and people have apps from then: the old home moves to the new name
-/// once (`adoptFormer`), and `$YONKA_HOME` still says where a home is.
-package struct YokanHome: Sendable {
+/// Skillface was called Yokan, and Yonka before that, and people have apps from then: the old
+/// home moves to the new name once (`adoptFormer`), and `$YOKAN_HOME` or `$YONKA_HOME` still
+/// says where a home is.
+package struct SkillfaceHome: Sendable {
     package let root: URL
 
     package init(root: URL) { self.root = root }
 
-    package static func standard() -> YokanHome {
-        if let path = given { return YokanHome(root: URL(fileURLWithPath: path)) }
-        return YokanHome(root: URL.applicationSupportDirectory.appending(path: "Yokan"))
+    package static func standard() -> SkillfaceHome {
+        if let path = given { return SkillfaceHome(root: URL(fileURLWithPath: path)) }
+        return SkillfaceHome(root: URL.applicationSupportDirectory.appending(path: "Skillface"))
     }
+
+    /// What it was called, latest first.
+    private static let former = ["Yokan", "Yonka"]
 
     private static var given: String? {
         let environment = ProcessInfo.processInfo.environment
-        return environment["YOKAN_HOME"] ?? environment["YONKA_HOME"]
+        return former.reduce(environment["SKILLFACE_HOME"]) { $0 ?? environment[$1.uppercased() + "_HOME"] }
     }
 
     /// The standard home under its old name, moved to its new one. A home the environment names
     /// is wherever it was put, so it stays.
     package static func adoptFormer() throws {
         guard given == nil else { return }
-        try adopt(URL.applicationSupportDirectory.appending(path: "Yonka"), as: standard().root)
+        // Latest first: once one has moved in, an older one is left where it is.
+        for name in former { try adopt(URL.applicationSupportDirectory.appending(path: name), as: standard().root) }
     }
 
     /// Moves a home to a new place, once: only while the new place is empty, so a home that's
@@ -32,7 +37,7 @@ package struct YokanHome: Sendable {
     static func adopt(_ old: URL, as new: URL) throws {
         guard files.fileExists(atPath: old.path), !files.fileExists(atPath: new.path) else { return }
         do { try files.moveItem(at: old, to: new) } catch {
-            throw YokanError("Couldn't bring your apps over from Yonka. They're still in \(old.path): \(error.localizedDescription)")
+            throw SkillfaceError("Couldn't bring your apps over from \(old.lastPathComponent). They're still in \(old.path): \(error.localizedDescription)")
         }
     }
 
@@ -124,10 +129,10 @@ package struct YokanHome: Sendable {
             return (String(url.standardizedFileURL.path.dropFirst(base.count)), url, size)
         }
         guard files.contains(where: { $0.url.lastPathComponent == "SKILL.md" }) else {
-            throw YokanError("There are no skills in there: nothing in it is a SKILL.md")
+            throw SkillfaceError("There are no skills in there: nothing in it is a SKILL.md")
         }
         guard files.count <= Self.sourceLimit.files, files.reduce(0, { $0 + $1.size }) <= Self.sourceLimit.bytes else {
-            throw YokanError("That's too big to make an app from: over 5,000 files or 50 MB")
+            throw SkillfaceError("That's too big to make an app from: over 5,000 files or 50 MB")
         }
         let app = try create(named: name)
         do {
@@ -136,7 +141,7 @@ package struct YokanHome: Sendable {
                 try Self.files.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try Self.files.copyItem(at: file.url, to: copy)
             }
-            guard !skills(of: app).isEmpty else { throw YokanError("There are no skills in there: no SKILL.md in it reads as one") }
+            guard !skills(of: app).isEmpty else { throw SkillfaceError("There are no skills in there: no SKILL.md in it reads as one") }
             let copied = Self.files.enumerator(at: app.source, includingPropertiesForKeys: [.isDirectoryKey])?.allObjects as? [URL] ?? []
             for url in copied + [app.source] {
                 let folder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
@@ -275,7 +280,7 @@ package struct YokanHome: Sendable {
     /// A memory's file, from a name that can only be inside the app's memory.
     private func memoryFile(_ name: String, of app: SkillApp) throws -> URL {
         let parts = name.split(separator: "/", omittingEmptySubsequences: false)
-        guard !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") }) else { throw YokanError("“\(name)” isn't a name memory can have") }
+        guard !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") }) else { throw SkillfaceError("“\(name)” isn't a name memory can have") }
         return app.memory.appending(path: name)
     }
 
@@ -307,7 +312,7 @@ package struct YokanHome: Sendable {
 
     private func file(of session: Session, in app: SkillApp) throws -> URL {
         // The id names a file and is handed to Claude Code as a flag: only ever a UUID.
-        guard UUID(uuidString: session.id) != nil else { throw YokanError("That session's id isn't one") }
+        guard UUID(uuidString: session.id) != nil else { throw SkillfaceError("That session's id isn't one") }
         return app.sessions.appending(path: "\(session.id).json")
     }
 
@@ -330,7 +335,7 @@ package struct YokanHome: Sendable {
     }
 }
 
-extension YokanHome {
+extension SkillfaceHome {
     private static let builderFiles = ["app.json", "interface.html", "APP.md", "demo.json"]
 
     static func codexContext(_ turn: AgentTurn) -> [String: String] {
@@ -376,7 +381,7 @@ extension YokanHome {
             guard parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && !$0.contains("\0") }),
                   !build || Self.builderFiles.contains(file.path) || inDesigns,
                   Self.hasNoLink(from: turn.app.folder, parts: (build ? [] : ["memory"]) + parts) else {
-                throw YokanError("\(turn.provider.name) requested a file outside this turn’s writable files: \(file.path)")
+                throw SkillfaceError("\(turn.provider.name) requested a file outside this turn’s writable files: \(file.path)")
             }
         }
         // Publish stage changes only after every file for that stage is in place.
@@ -399,7 +404,7 @@ extension YokanHome {
         let parts = path.components(separatedBy: "/")
         guard let name = parts.last,
               parts.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && !$0.contains("\0") })
-        else { throw YokanError("Invalid file path: \(path)") }
+        else { throw SkillfaceError("Invalid file path: \(path)") }
         let flags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
         var parent = Darwin.open(app.folder.path, flags)
         guard parent >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
@@ -413,7 +418,7 @@ extension YokanHome {
             Darwin.close(parent)
             parent = child
         }
-        let temporary = ".yokan-" + UUID().uuidString
+        let temporary = ".skillface-" + UUID().uuidString
         let fd = openat(parent, temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
         guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
         defer { unlinkat(parent, temporary, 0) }

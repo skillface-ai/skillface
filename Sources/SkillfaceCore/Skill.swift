@@ -1,7 +1,7 @@
 import Foundation
 
-/// Anything Yokan couldn't do, in words the user reads as they are.
-package struct YokanError: LocalizedError, Equatable {
+/// Anything Skillface couldn't do, in words the user reads as they are.
+package struct SkillfaceError: LocalizedError, Equatable {
     package let message: String
     package init(_ message: String) { self.message = message }
     package var errorDescription: String? { message }
@@ -20,8 +20,8 @@ package struct Skill: Equatable, Sendable {
 
     package init(text: String) throws {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { throw YokanError("That skill is empty") }
-        guard text.utf8.count <= Self.limit else { throw YokanError("That's too long to be a skill: over 200 KB") }
+        guard !text.isEmpty else { throw SkillfaceError("That skill is empty") }
+        guard text.utf8.count <= Self.limit else { throw SkillfaceError("That's too long to be a skill: over 200 KB") }
         let lines = text.components(separatedBy: .newlines)
         var front: [String: String] = [:]
         if lines.first == "---", let end = lines.dropFirst().firstIndex(of: "---") {
@@ -34,7 +34,7 @@ package struct Skill: Equatable, Sendable {
         let heading = lines.first { $0.hasPrefix("# ") }.map { String($0.dropFirst(2)).trimmingCharacters(in: .whitespaces) }
         let named = front["name"].map(Self.title)
         guard let name = [named, heading].compactMap({ $0 }).first(where: { !$0.isEmpty }) else {
-            throw YokanError("That doesn't look like a skill: it has no name and no heading")
+            throw SkillfaceError("That doesn't look like a skill: it has no name and no heading")
         }
         (self.name, self.description, self.text) = (String(name.prefix(60)), front["description"] ?? "", text)
     }
@@ -63,8 +63,8 @@ package struct Skill: Equatable, Sendable {
 
     package static func fetch(_ url: URL) async throws -> String {
         let (data, response) = try await URLSession.shared.data(from: url)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw YokanError("Couldn't read a skill from \(url.host() ?? "that link")") }
-        guard data.count <= limit else { throw YokanError("That's too long to be a skill: over 200 KB") }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw SkillfaceError("Couldn't read a skill from \(url.host() ?? "that link")") }
+        guard data.count <= limit else { throw SkillfaceError("That's too long to be a skill: over 200 KB") }
         return String(decoding: data, as: UTF8.self)
     }
 

@@ -36,10 +36,10 @@ package struct Command: Equatable, Sendable {
     }
 
     /// What `sudo` asks for a password with, there being no terminal: a dialog of the Mac's own.
-    /// The password goes from it to sudo, and Yokan never sees it.
+    /// The password goes from it to sudo, and Skillface never sees it.
     static let askpass = """
         #!/bin/sh
-        /usr/bin/osascript -e 'text returned of (display dialog "A command you approved in Yokan needs your Mac password." default answer "" with hidden answer with title "Yokan")'
+        /usr/bin/osascript -e 'text returned of (display dialog "A command you approved in Skillface needs your Mac password." default answer "" with hidden answer with title "Skillface")'
 
         """
 
@@ -52,7 +52,7 @@ package struct Command: Equatable, Sendable {
     /// answer a password and nothing else, so a command that asks a question waits until stopped.
     package func run(log: URL, askpass: URL) async throws -> Outcome {
         let files = FileManager.default
-        let folder = files.temporaryDirectory.appending(path: "yokan-run-" + UUID().uuidString)
+        let folder = files.temporaryDirectory.appending(path: "skillface-run-" + UUID().uuidString)
         try files.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? files.removeItem(at: folder) }
         try Data(Self.askpass.utf8).write(to: askpass)

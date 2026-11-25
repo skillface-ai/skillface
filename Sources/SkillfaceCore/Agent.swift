@@ -34,8 +34,8 @@ package struct AgentTurn: Sendable {
     package var runs: Bool { terminal && session.kind == .use && provider.sandboxes }
 }
 
-/// What Claude Code is asked and told. The user's own Claude Code, contained as Yongkang
-/// contains a miniapp's: `--restricted` leaves it no shell, no web and none of the user's
+/// What Claude Code is asked and told. The user's own Claude Code, contained:
+/// `--restricted` leaves it no shell, no web and none of the user's
 /// settings, acceptEdits lets it write in its folder, and with nobody to prompt, anything else
 /// is denied. An app the user let run commands gets Bash back, inside Claude Code's sandbox
 /// (`sandbox(for:)`), which is the only reason it runs unasked: without those settings Bash
@@ -50,7 +50,7 @@ package enum Agent {
     /// And when they say the design is right.
     package static let finish = "That's right. Finish the app."
     /// What an app's agent ends a message with when it needs to run a command and may not, so
-    /// Yokan asks the user for it. Only ever a request: the answer is the user's, in a dialog.
+    /// Skillface asks the user for it. Only ever a request: the answer is the user's, in a dialog.
     package static let asks = "[[terminal]]"
     /// And what it's sent for the user once they've said yes.
     package static let allowed = "You can run commands now. Go on."
@@ -153,7 +153,7 @@ package enum Agent {
             return """
                 You can't run commands yet, or go to the web. When a skill needs a command run, don't tell the \
                 user to run it and don't send them to a menu: say in a sentence what you need to run, and end \
-                your message with a line that is exactly \(asks). Yokan then asks the user to let this app run \
+                your message with a line that is exactly \(asks). Skillface then asks the user to let this app run \
                 commands, and you are told if they do, in this same session: never ask for a new session or \
                 for a menu, whatever <app> or an earlier message says. If they don't, do the thinking yourself \
                 and say exactly what they have to run.
@@ -172,7 +172,7 @@ package enum Agent {
             anything the sandbox refuses that the work truly needs) you ask for, and never tell the user to run \
             it themselves: say in a sentence what the command does and why, then end your message with the one \
             command between a line that is exactly \(Command.open) and a line that is exactly \(Command.close). \
-            Yokan shows it to the user, and if they approve runs it on their Mac, outside the sandbox, in \
+            Skillface shows it to the user, and if they approve runs it on their Mac, outside the sandbox, in \
             an empty folder, and tells you how it ended. Each one costs the user a wait, so find everything \
             that's missing before you ask and ask for all of it at once (`brew install a b c`), and for a step \
             of the work that can't run in the sandbox at all, write a script in work that does the whole step \
@@ -226,7 +226,7 @@ package enum Agent {
         let rules = turn.rules.trimmingCharacters(in: .whitespacesAndNewlines)
         let made = made(for: turn)
         return """
-            You are \(turn.app.info.name), an app the user made in Yokan, a Mac app, from \(made.from). Yokan shows \
+            You are \(turn.app.info.name), an app the user made in Skillface, a Mac app, from \(made.from). Skillface shows \
             what you say in the app's own interface, and keeps every session, so the user comes back to this one \
             whenever they like and starts new ones whenever they like. \(turn.skills.isEmpty ? "Do what the skill says." : "Follow the workflow <app> describes, and do what each skill says when its turn comes.")
 
@@ -264,27 +264,27 @@ package enum Agent {
             : """
               The user added a whole repository of skills, \(turn.skills.count) of them, which is in source/ as it \
               came. You are building \(turn.app.info.name), one app for all of them, with the user, in this folder. \
-              So before step 1, load yokan:explore: read everything there and work out how the skills are used together.
+              So before step 1, load skillface:explore: read everything there and work out how the skills are used together.
               """
         return """
-        You are Yokan's builder. Yokan is a Mac app that turns a skill into an app: the skill keeps doing the \
+        You are Skillface's builder. Skillface is a Mac app that turns a skill into an app: the skill keeps doing the \
         thinking, and the app gives it an interface of its own, memory that outlives every session, and sessions \
         the user can come back to, so the skill never starts again from nothing. \(added)
 
         The build is four steps, each a skill of yours. Load a step's skill with the Skill tool as you reach it, and \
         write the step you are on to "stage" in app.json:
 
-        0. explore (yokan:explore), only for an app made from a repository of skills, which has a source/ \
+        0. explore (skillface:explore), only for an app made from a repository of skills, which has a source/ \
         folder: read all of it, and work out the workflow its skills make. The stage stays "interview".
-        1. interview (yokan:interview): read the skill, then ask the user what only they can answer, with a \
+        1. interview (skillface:interview): read the skill, then ask the user what only they can answer, with a \
         rough sketch of each answer.
-        2. design (yokan:design): work out what kind of tool this skill is, then draw three versions of its \
+        2. design (skillface:design): work out what kind of tool this skill is, then draw three versions of its \
         interface, on sample data, for the user to choose from.
-        3. adjust (yokan:adjust): change the one they chose until it's right. A user who comes back later to \
+        3. adjust (skillface:adjust): change the one they chose until it's right. A user who comes back later to \
         change the interface lands here too.
-        4. implement (yokan:implement): write what the running app needs, check it, and set stage to "done".
+        4. implement (skillface:implement): write what the running app needs, check it, and set stage to "done".
 
-        yokan:interface is the contract interface.html is written to: load it before you write or change one.
+        skillface:interface is the contract interface.html is written to: load it before you write or change one.
 
         The user reads your messages in a narrow chat beside a live preview, which redraws each time you change a \
         file: the versions in designs/ while they are choosing, interface.html after. So keep messages to a few plain sentences, never paste code or file contents into \
@@ -294,7 +294,7 @@ package enum Agent {
         - [ ] Always in view, beside the conversation
         - [ ] Only when I ask for it
 
-        Yokan draws those as buttons. The user can always type something else.
+        Skillface draws those as buttons. The user can always type something else.
         """
     }
 }
@@ -477,10 +477,10 @@ package final class AgentProcess: Sendable {
                     }
                     for await _ in exited {}
                     if Task.isCancelled { return continuation.finish() }
-                    if codex != nil, let failure { throw YokanError(failure) }
+                    if codex != nil, let failure { throw SkillfaceError(failure) }
                     if !finished || (codex != nil && process.terminationStatus != 0) {
                         let said = (try? String(contentsOf: log, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        throw YokanError(said.isEmpty ? "\(turn.provider.name) stopped before it answered" : turn.provider.failure(String(said.suffix(300))))
+                        throw SkillfaceError(said.isEmpty ? "\(turn.provider.name) stopped before it answered" : turn.provider.failure(String(said.suffix(300))))
                     }
                     if let codex {
                         for event in try codex.finish(turn) { continuation.yield(event) }
@@ -511,7 +511,7 @@ package final class AgentProcess: Sendable {
         // The last two lines, after whatever .zshrc printed: where it is (empty when it isn't), and PATH.
         let lines = said.split(separator: "\n", omittingEmptySubsequences: false).map(String.init).dropLast()
         guard lines.count >= 2, lines[lines.count - 2].hasPrefix("/") else {
-            throw YokanError("Install \(provider.name) and make sure \(provider.rawValue) is on your Terminal PATH, then try again.")
+            throw SkillfaceError("Install \(provider.name) and make sure \(provider.rawValue) is on your Terminal PATH, then try again.")
         }
         return (URL(fileURLWithPath: lines[lines.count - 2]), lines[lines.count - 1])
     }
