@@ -1,0 +1,29 @@
+name: Release
+
+# Push a tag vX.Y.Z whose commit has X.Y.Z in App/Info.plist.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The tag is the version in Info.plist
+        run: test "v$(make version)" = "$GITHUB_REF_NAME"
+      - run: make check
+      - run: make dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" .build/dist/* --verify-tag --generate-notes

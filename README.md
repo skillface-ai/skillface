@@ -81,7 +81,11 @@ make run      # open Skillface
 make check    # build + test
 make shots    # .build/shots/*.png, every screen on sample data
 make app      # .build/app/Skillface.app
+make dist     # .build/dist/Skillface-<version>.zip and its sha256
 ```
+
+Every push and pull request runs `make check` and `make dist` on GitHub. To release, set the version in
+`App/Info.plist`, commit, and push the tag `v<version>`: the zip is published as a GitHub release.
 
 `$SKILLFACE_HOME` moves everything Skillface keeps. The live test builds a real app with your Claude Code:
 `SKILLFACE_LIVE=/tmp/skillface SKILLFACE_SKILL=path/to/SKILL.md swift test --filter Live`. With

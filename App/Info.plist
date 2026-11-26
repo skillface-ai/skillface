@@ -6,14 +6,14 @@
 	<string>skillface</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.skillface.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Skillface</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.0.1</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
