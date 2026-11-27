@@ -81,11 +81,22 @@ make run      # open Skillface
 make check    # build + test
 make shots    # .build/shots/*.png, every screen on sample data
 make app      # .build/app/Skillface.app
-make dist     # .build/dist/Skillface-<version>.zip and its sha256
+make dist     # .build/dist/Skillface-<version>.dmg and its sha256
 ```
 
 Every push and pull request runs `make check` and `make dist` on GitHub. To release, set the version in
-`App/Info.plist`, commit, and push the tag `v<version>`: the zip is published as a GitHub release.
+`App/Info.plist`, commit, and push the tag `v<version>`: the dmg is published as a GitHub release.
+
+A release opens without a Gatekeeper warning only when it is signed with a Developer ID and notarized
+by Apple, which the release does once the repository has these secrets (it is ad-hoc signed without them):
+
+| Secret | What it is |
+|---|---|
+| `MACOS_CERT_P12` | The Developer ID Application certificate and its key, exported as .p12, base64 |
+| `MACOS_CERT_PASSWORD` | The password that .p12 was exported with |
+| `NOTARY_KEY_P8` | An App Store Connect API key (.p8), base64 |
+| `NOTARY_KEY_ID` | That key's ID |
+| `NOTARY_ISSUER` | The issuer ID shown above the keys in App Store Connect |
 
 `$SKILLFACE_HOME` moves everything Skillface keeps. The live test builds a real app with your Claude Code:
 `SKILLFACE_LIVE=/tmp/skillface SKILLFACE_SKILL=path/to/SKILL.md swift test --filter Live`. With

@@ -36,7 +36,7 @@ to come back to. README.md has the product and the flow.
 make check    # build + test: the definition of done
 make shots    # .build/shots/*.png
 make run      # open the app
-make dist     # .build/dist/Skillface-<version>.zip, what a release ships
+make dist     # .build/dist/Skillface-<version>.dmg, what a release ships
 ```
 
 ## Rules
