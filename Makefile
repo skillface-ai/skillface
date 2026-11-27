@@ -31,6 +31,8 @@ dist: app ## the app zipped as .build/dist/Skillface-<version>.zip, with its sha
 	rm -rf .build/dist && mkdir -p .build/dist
 	ditto -c -k --keepParent $(APP) $(ZIP)
 	cd .build/dist && shasum -a 256 $(notdir $(ZIP)) > $(notdir $(ZIP)).sha256
+	# The same zip under a name that never changes, so releases/latest/download/Skillface.zip always works.
+	cp $(ZIP) .build/dist/Skillface.zip
 	@echo "packed $(CURDIR)/$(ZIP)"
 
 help: ## every target
